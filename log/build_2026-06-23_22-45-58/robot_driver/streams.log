@@ -1,0 +1,24 @@
+[1.012s] Invoking command in '/home/et2020045/ros2_ws/src/robot_driver': PYTHONPATH=/home/et2020045/ros2_ws/build/robot_driver/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/robot_driver build --build-base /home/et2020045/ros2_ws/build/robot_driver/build install --record /home/et2020045/ros2_ws/build/robot_driver/install.log --single-version-externally-managed install_data
+[1.314s] running egg_info
+[1.332s] writing ../../build/robot_driver/robot_driver.egg-info/PKG-INFO
+[1.333s] writing dependency_links to ../../build/robot_driver/robot_driver.egg-info/dependency_links.txt
+[1.334s] writing entry points to ../../build/robot_driver/robot_driver.egg-info/entry_points.txt
+[1.334s] writing requirements to ../../build/robot_driver/robot_driver.egg-info/requires.txt
+[1.335s] writing top-level names to ../../build/robot_driver/robot_driver.egg-info/top_level.txt
+[1.375s] reading manifest file '../../build/robot_driver/robot_driver.egg-info/SOURCES.txt'
+[1.376s] writing manifest file '../../build/robot_driver/robot_driver.egg-info/SOURCES.txt'
+[1.376s] running build
+[1.376s] running build_py
+[1.377s] copying robot_driver/motor_controller.py -> /home/et2020045/ros2_ws/build/robot_driver/build/lib/robot_driver
+[1.377s] running install
+[1.386s] running install_lib
+[1.405s] copying /home/et2020045/ros2_ws/build/robot_driver/build/lib/robot_driver/motor_controller.py -> /home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages/robot_driver
+[1.406s] byte-compiling /home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages/robot_driver/motor_controller.py to motor_controller.cpython-312.pyc
+[1.408s] running install_data
+[1.408s] running install_egg_info
+[1.429s] removing '/home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages/robot_driver-0.0.0-py3.12.egg-info' (and everything under it)
+[1.429s] Copying ../../build/robot_driver/robot_driver.egg-info to /home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages/robot_driver-0.0.0-py3.12.egg-info
+[1.431s] running install_scripts
+[1.571s] Installing motor_controller script to /home/et2020045/ros2_ws/install/robot_driver/lib/robot_driver
+[1.572s] writing list of installed files to '/home/et2020045/ros2_ws/build/robot_driver/install.log'
+[1.648s] Invoked command in '/home/et2020045/ros2_ws/src/robot_driver' returned '0': PYTHONPATH=/home/et2020045/ros2_ws/build/robot_driver/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/robot_driver build --build-base /home/et2020045/ros2_ws/build/robot_driver/build install --record /home/et2020045/ros2_ws/build/robot_driver/install.log --single-version-externally-managed install_data

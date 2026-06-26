@@ -1,0 +1,26 @@
+[0.014s] Invoking command in '/home/et2020045/ros2_ws/build/rplidar_ros': /usr/bin/cmake /home/et2020045/ros2_ws/src/rplidar_ros -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCMAKE_INSTALL_PREFIX=/home/et2020045/ros2_ws/install/rplidar_ros
+[0.036s] [0mCMake Deprecation Warning at CMakeLists.txt:1 (cmake_minimum_required):
+[0.036s]   Compatibility with CMake < 3.5 will be removed from a future version of
+[0.036s]   CMake.
+[0.036s] 
+[0.036s]   Update the VERSION argument <min> value or use a ...<max> suffix to tell
+[0.036s]   CMake that the project does not need compatibility with older versions.
+[0.036s] 
+[0.036s] [0m
+[0.185s] -- The C compiler identification is GNU 13.3.0
+[0.392s] -- The CXX compiler identification is unknown
+[0.417s] -- Detecting C compiler ABI info
+[0.575s] -- Detecting C compiler ABI info - done
+[0.592s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.592s] -- Detecting C compile features
+[0.593s] -- Detecting C compile features - done
+[0.594s] [31mCMake Error at CMakeLists.txt:2 (project):
+[0.594s]   No CMAKE_CXX_COMPILER could be found.
+[0.594s] 
+[0.594s]   Tell CMake where to find the compiler by setting either the environment
+[0.594s]   variable "CXX" or the CMake cache entry CMAKE_CXX_COMPILER to the full path
+[0.594s]   to the compiler, or to the compiler name if it is in the PATH.
+[0.594s] 
+[0.594s] [0m
+[0.596s] -- Configuring incomplete, errors occurred!
+[0.615s] Invoked command in '/home/et2020045/ros2_ws/build/rplidar_ros' returned '1': /usr/bin/cmake /home/et2020045/ros2_ws/src/rplidar_ros -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCMAKE_INSTALL_PREFIX=/home/et2020045/ros2_ws/install/rplidar_ros

@@ -1,0 +1,37 @@
+running egg_info
+creating ../../build/robot_driver/robot_driver.egg-info
+writing ../../build/robot_driver/robot_driver.egg-info/PKG-INFO
+writing dependency_links to ../../build/robot_driver/robot_driver.egg-info/dependency_links.txt
+writing entry points to ../../build/robot_driver/robot_driver.egg-info/entry_points.txt
+writing requirements to ../../build/robot_driver/robot_driver.egg-info/requires.txt
+writing top-level names to ../../build/robot_driver/robot_driver.egg-info/top_level.txt
+writing manifest file '../../build/robot_driver/robot_driver.egg-info/SOURCES.txt'
+reading manifest file '../../build/robot_driver/robot_driver.egg-info/SOURCES.txt'
+writing manifest file '../../build/robot_driver/robot_driver.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/et2020045/ros2_ws/build/robot_driver/build
+creating /home/et2020045/ros2_ws/build/robot_driver/build/lib
+creating /home/et2020045/ros2_ws/build/robot_driver/build/lib/robot_driver
+copying robot_driver/motor_controller.py -> /home/et2020045/ros2_ws/build/robot_driver/build/lib/robot_driver
+copying robot_driver/__init__.py -> /home/et2020045/ros2_ws/build/robot_driver/build/lib/robot_driver
+running install
+running install_lib
+creating /home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages/robot_driver
+copying /home/et2020045/ros2_ws/build/robot_driver/build/lib/robot_driver/motor_controller.py -> /home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages/robot_driver
+copying /home/et2020045/ros2_ws/build/robot_driver/build/lib/robot_driver/__init__.py -> /home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages/robot_driver
+byte-compiling /home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages/robot_driver/motor_controller.py to motor_controller.cpython-312.pyc
+byte-compiling /home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages/robot_driver/__init__.py to __init__.cpython-312.pyc
+running install_data
+creating /home/et2020045/ros2_ws/install/robot_driver/share/ament_index
+creating /home/et2020045/ros2_ws/install/robot_driver/share/ament_index/resource_index
+creating /home/et2020045/ros2_ws/install/robot_driver/share/ament_index/resource_index/packages
+copying resource/robot_driver -> /home/et2020045/ros2_ws/install/robot_driver/share/ament_index/resource_index/packages
+copying package.xml -> /home/et2020045/ros2_ws/install/robot_driver/share/robot_driver
+creating /home/et2020045/ros2_ws/install/robot_driver/share/robot_driver/launch
+copying launch/robot_bringup.launch.py -> /home/et2020045/ros2_ws/install/robot_driver/share/robot_driver/launch
+running install_egg_info
+Copying ../../build/robot_driver/robot_driver.egg-info to /home/et2020045/ros2_ws/install/robot_driver/lib/python3.12/site-packages/robot_driver-0.0.0-py3.12.egg-info
+running install_scripts
+Installing motor_controller script to /home/et2020045/ros2_ws/install/robot_driver/lib/robot_driver
+writing list of installed files to '/home/et2020045/ros2_ws/build/robot_driver/install.log'
