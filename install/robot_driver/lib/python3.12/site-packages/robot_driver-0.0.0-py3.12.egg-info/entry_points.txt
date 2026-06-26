@@ -1,3 +1,0 @@
-[console_scripts]
-motor_controller = robot_driver.motor_controller:main
-odom_publisher = robot_driver.odom_publisher:main
