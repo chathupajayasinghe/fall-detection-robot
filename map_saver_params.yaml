@@ -1,0 +1,4 @@
+map_saver:
+  ros__parameters:
+    map_subscribe_transient_local: false
+    reliability: BEST_EFFORT

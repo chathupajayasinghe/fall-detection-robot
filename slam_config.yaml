@@ -1,0 +1,9 @@
+slam_toolbox:
+  ros__parameters:
+    map_frame: map
+    base_frame: base_link
+    scan_topic: /scan
+    mode: mapping
+    max_laser_range: 12.0
+    throttle_scans: 1
+    use_odometry: false
