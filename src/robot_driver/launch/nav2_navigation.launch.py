@@ -1,7 +1,7 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -52,11 +52,16 @@ def generate_launch_description():
 
         # Nav2 stack — launched directly so params_file is applied explicitly
         # to each node instead of relying on nav2_bringup to forward the argument
+        LogInfo(msg=['[nav2_navigation] params_file resolved to: ', params_file]),
         Node(
             package='nav2_controller',
             executable='controller_server',
             output='screen',
-            parameters=[params_file, {'use_sim_time': use_sim_time}],
+            parameters=[params_file, {
+                'use_sim_time': False,
+                'controller_plugins': ['FollowPath'],
+                'FollowPath.plugin': 'nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController',
+            }],
         ),
         Node(
             package='nav2_smoother',
