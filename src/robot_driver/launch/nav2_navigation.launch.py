@@ -3,7 +3,8 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
@@ -11,7 +12,9 @@ def generate_launch_description():
     nav2_bringup_dir = get_package_share_directory('nav2_bringup')
 
     default_map = os.path.join(os.path.expanduser('~'), 'maps', 'home_map.yaml')
-    default_params = os.path.join(pkg_share, 'config', 'nav2_params.yaml')
+    default_params = PathJoinSubstitution(
+        [FindPackageShare('robot_driver'), 'config', 'nav2_params.yaml']
+    )
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     map_yaml_file = LaunchConfiguration('map')
@@ -42,7 +45,9 @@ def generate_launch_description():
             launch_arguments={
                 'map': map_yaml_file,
                 'use_sim_time': use_sim_time,
-                'params_file': os.path.join(pkg_share, 'config', 'amcl_params.yaml'),
+                'params_file': PathJoinSubstitution(
+                    [FindPackageShare('robot_driver'), 'config', 'amcl_params.yaml']
+                ),
             }.items(),
         ),
 

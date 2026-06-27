@@ -1,3 +1,4 @@
+import glob
 import os
 from setuptools import find_packages, setup
 
@@ -16,10 +17,7 @@ setup(
             'launch/localization.launch.py',
             'launch/nav2_navigation.launch.py',
         ]),
-        ('share/' + package_name + '/config', [
-            'config/nav2_params.yaml',
-            'config/amcl_params.yaml',
-        ]),
+        ('share/' + package_name + '/config', glob.glob('config/*.yaml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
