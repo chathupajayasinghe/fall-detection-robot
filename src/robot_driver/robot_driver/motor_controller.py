@@ -21,6 +21,19 @@ class MotorController(Node):
     def __init__(self):
         super().__init__('motor_controller')
 
+        # Reboot-safe GPIO cleanup: free all motor pins before gpiozero claims them
+        import lgpio
+        try:
+            h = lgpio.gpiochip_open(0)
+            for pin in [12, 5, 6, 13, 23, 24]:
+                try:
+                    lgpio.gpio_free(h, pin)
+                except:
+                    pass
+            lgpio.gpiochip_close(h)
+        except:
+            pass
+
         # --- Motor Pins (Channel A: Left, Channel B: Right) ---
         self.pwm_a = self._create_pwm_device(12)
         self.ain1  = DigitalOutputDevice(5)
@@ -69,7 +82,17 @@ class MotorController(Node):
                     f'PWM pin {pin} init failed on attempt {attempt + 1}: {exc}'
                 )
                 if attempt == 0:
-                    Device.close_all()
+                    try:
+                        from gpiozero import Device
+                        Device._default_pin_factory().close()
+                    except:
+                        import lgpio
+                        try:
+                            h = lgpio.gpiochip_open(0)
+                            lgpio.gpio_free(h, pin)
+                            lgpio.gpiochip_close(h)
+                        except:
+                            pass
                     time.sleep(0.1)
                 else:
                     raise
