@@ -10,18 +10,18 @@ from tf2_ros import TransformBroadcaster
 from geometry_msgs.msg import TransformStamped
 
 os.environ["GPIOZERO_PIN_FACTORY"] = "lgpio"
-from gpiozero import PWMOutputDevice, DigitalOutputDevice, RotaryEncoder
+from gpiozero import Device, PWMOutputDevice, DigitalOutputDevice, RotaryEncoder
 
 class MotorController(Node):
     def __init__(self):
         super().__init__('motor_controller')
 
         # --- Motor Pins (Channel A: Left, Channel B: Right) ---
-        self.pwm_a = PWMOutputDevice(12, frequency=1000, initial_value=0)
+        self.pwm_a = self._create_pwm_device(12)
         self.ain1  = DigitalOutputDevice(5)
         self.ain2  = DigitalOutputDevice(6)
 
-        self.pwm_b = PWMOutputDevice(13, frequency=1000, initial_value=0)
+        self.pwm_b = self._create_pwm_device(13)
         self.bin1  = DigitalOutputDevice(23)
         self.bin2  = DigitalOutputDevice(24)
 
@@ -54,6 +54,20 @@ class MotorController(Node):
         self.create_timer(0.05, self.update_odometry)
 
         self.get_logger().info('🤖 Motor+Odometry Node Ready — Pins: 12,5,6,13,23,24')
+
+    def _create_pwm_device(self, pin):
+        for attempt in range(2):
+            try:
+                return PWMOutputDevice(pin, frequency=1000, initial_value=0)
+            except Exception as exc:
+                self.get_logger().warn(
+                    f'PWM pin {pin} init failed on attempt {attempt + 1}: {exc}'
+                )
+                if attempt == 0:
+                    Device.close_all()
+                    time.sleep(0.1)
+                else:
+                    raise
 
     def listener_callback(self, msg):
         linear_x = msg.linear.x
@@ -128,10 +142,19 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        node.pwm_a.value = 0
-        node.pwm_b.value = 0
-        node.ain1.off(); node.ain2.off()
-        node.bin1.off(); node.bin2.off()
+        try:
+            node.pwm_a.value = 0
+            node.pwm_b.value = 0
+            node.ain1.off(); node.ain2.off()
+            node.bin1.off(); node.bin2.off()
+            node.pwm_a.close()
+            node.pwm_b.close()
+            node.ain1.close(); node.ain2.close()
+            node.bin1.close(); node.bin2.close()
+            node.left_encoder.close()
+            node.right_encoder.close()
+        except Exception:
+            pass
         node.destroy_node()
         rclpy.shutdown()
 

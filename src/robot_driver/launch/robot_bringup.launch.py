@@ -2,6 +2,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -19,9 +20,15 @@ def generate_launch_description():
         default_value='false',
         description='Use simulation / Gazebo clock'
     )
+    declare_start_slam_toolbox = DeclareLaunchArgument(
+        'start_slam_toolbox',
+        default_value='true',
+        description='Start slam_toolbox when bringing up the robot'
+    )
 
     slam_params_file = LaunchConfiguration('slam_params_file')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    start_slam_toolbox = LaunchConfiguration('start_slam_toolbox')
 
     # 1. Path to the standard RPLidar launch file
     rplidar_launch_dir = os.path.join(
@@ -69,12 +76,14 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'autostart': 'true',
             'use_lifecycle_manager': 'false'
-        }.items()
+        }.items(),
+        condition=IfCondition(start_slam_toolbox)
     )
 
     return LaunchDescription([
         declare_slam_params_file,
         declare_use_sim_time,
+        declare_start_slam_toolbox,
         lidar_node,
         static_tf_node,
         motor_node,

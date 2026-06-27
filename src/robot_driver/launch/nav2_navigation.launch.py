@@ -29,6 +29,9 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(
                 os.path.join(pkg_share, 'launch', 'robot_bringup.launch.py')
             ),
+            launch_arguments={
+                'start_slam_toolbox': 'false'
+            }.items(),
         ),
 
         # AMCL + map server
