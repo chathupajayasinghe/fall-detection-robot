@@ -21,14 +21,14 @@ controller_server:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       desired_linear_vel: 0.2
       lookahead_dist: 0.4
-      min_lookahead_dist: 0.2
-      max_lookahead_dist: 0.6
-      transform_tolerance: 0.5
+      min_lookahead_dist: 0.3
+      max_lookahead_dist: 0.9
       use_velocity_scaled_lookahead_dist: false
       min_approach_linear_velocity: 0.05
       use_rotate_to_heading: true
       rotate_to_heading_angular_vel: 1.8
-      allow_reversing: false
+      transform_tolerance: 0.1
+      use_collision_detection: true
 
 local_costmap:
   local_costmap:
