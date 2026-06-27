@@ -22,7 +22,7 @@ def generate_launch_description():
     )
     declare_start_slam_toolbox = DeclareLaunchArgument(
         'start_slam_toolbox',
-        default_value='true',
+        default_value='false',
         description='Start slam_toolbox when bringing up the robot'
     )
 
