@@ -12,6 +12,11 @@ from geometry_msgs.msg import TransformStamped
 os.environ["GPIOZERO_PIN_FACTORY"] = "lgpio"
 from gpiozero import Device, PWMOutputDevice, DigitalOutputDevice, RotaryEncoder
 
+# Motor speed correction factors to compensate for hardware imbalance.
+# Tune RIGHT_SPEED_SCALE if the robot drifts — values below 1.0 slow that side.
+LEFT_SPEED_SCALE  = 1.0
+RIGHT_SPEED_SCALE = 0.85
+
 class MotorController(Node):
     def __init__(self):
         super().__init__('motor_controller')
@@ -72,8 +77,8 @@ class MotorController(Node):
     def listener_callback(self, msg):
         linear_x = msg.linear.x
         angular_z = msg.angular.z
-        left_speed = linear_x - (angular_z * self.wheel_separation / 2.0)
-        right_speed = linear_x + (angular_z * self.wheel_separation / 2.0)
+        left_speed  = (linear_x - (angular_z * self.wheel_separation / 2.0)) * LEFT_SPEED_SCALE
+        right_speed = (linear_x + (angular_z * self.wheel_separation / 2.0)) * RIGHT_SPEED_SCALE
         self.control_motor(left_speed, self.pwm_a, self.ain1, self.ain2)
         self.control_motor(right_speed, self.pwm_b, self.bin1, self.bin2)
 
