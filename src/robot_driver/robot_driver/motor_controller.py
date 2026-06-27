@@ -14,7 +14,7 @@ from gpiozero import Device, PWMOutputDevice, DigitalOutputDevice, RotaryEncoder
 
 # Motor speed correction factors to compensate for hardware imbalance.
 # Tune RIGHT_SPEED_SCALE if the robot drifts — values below 1.0 slow that side.
-LEFT_SPEED_SCALE  = 1.15
+LEFT_SPEED_SCALE  = 1.25
 RIGHT_SPEED_SCALE = 1.0
 
 class MotorController(Node):
