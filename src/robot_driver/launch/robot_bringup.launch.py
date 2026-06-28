@@ -39,7 +39,7 @@ def generate_launch_description():
     lidar_node = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(rplidar_launch_dir, 'rplidar_a1_launch.py')),
         launch_arguments={
-            'serial_port': '/dev/ttyUSB0',
+            'serial_port': '/dev/rplidar',
             'serial_baudrate': '115200',
             'scan_mode': 'Standard',
             'frame_id': 'laser'
