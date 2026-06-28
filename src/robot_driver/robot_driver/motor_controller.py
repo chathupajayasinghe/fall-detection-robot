@@ -12,10 +12,11 @@ from geometry_msgs.msg import TransformStamped
 os.environ["GPIOZERO_PIN_FACTORY"] = "lgpio"
 from gpiozero import Device, PWMOutputDevice, DigitalOutputDevice, RotaryEncoder
 
-# Motor speed correction factors to compensate for hardware imbalance.
-# Tune RIGHT_SPEED_SCALE if the robot drifts — values below 1.0 slow that side.
 LEFT_SPEED_SCALE  = 1.0
-RIGHT_SPEED_SCALE = 1.2
+RIGHT_SPEED_SCALE = 1.0
+
+# Proportional gain for closed-loop straight-line encoder correction.
+STRAIGHT_KP = 0.0005
 
 class MotorController(Node):
     def __init__(self):
@@ -60,6 +61,10 @@ class MotorController(Node):
         self.last_right = self.right_encoder.steps
         self.last_time = time.time()
 
+        # --- Closed-loop straight-line correction state ---
+        self.left_ticks_per_sec  = 0.0
+        self.right_ticks_per_sec = 0.0
+
         # --- Publishers ---
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -98,10 +103,18 @@ class MotorController(Node):
                     raise
 
     def listener_callback(self, msg):
-        linear_x = msg.linear.x
+        linear_x  = msg.linear.x
         angular_z = msg.angular.z
         left_speed  = (linear_x - (angular_z * self.wheel_separation / 2.0)) * LEFT_SPEED_SCALE
         right_speed = (linear_x + (angular_z * self.wheel_separation / 2.0)) * RIGHT_SPEED_SCALE
+
+        # Closed-loop correction: only during pure forward/backward motion.
+        # error > 0 means left is faster → slow left, speed up right.
+        if angular_z == 0.0 and linear_x != 0.0:
+            error = self.left_ticks_per_sec - self.right_ticks_per_sec
+            left_speed  -= STRAIGHT_KP * error
+            right_speed += STRAIGHT_KP * error
+
         self.control_motor(left_speed, self.pwm_a, self.ain1, self.ain2)
         self.control_motor(right_speed, self.pwm_b, self.bin1, self.bin2)
 
@@ -125,6 +138,9 @@ class MotorController(Node):
 
         left_ticks = self.left_encoder.steps
         right_ticks = self.right_encoder.steps
+
+        self.left_ticks_per_sec  = (left_ticks  - self.last_left)  / dt
+        self.right_ticks_per_sec = (right_ticks - self.last_right) / dt
 
         left_dist = (left_ticks - self.last_left) / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
         right_dist = (right_ticks - self.last_right) / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
