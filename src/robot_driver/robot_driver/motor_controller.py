@@ -16,7 +16,7 @@ LEFT_SPEED_SCALE  = 1.0
 RIGHT_SPEED_SCALE = 1.0
 
 # Proportional gain for closed-loop straight-line encoder correction.
-STRAIGHT_KP = 0.0005
+STRAIGHT_KP = 0.001
 
 class MotorController(Node):
     def __init__(self):
@@ -64,6 +64,7 @@ class MotorController(Node):
         # --- Closed-loop straight-line correction state ---
         self.left_ticks_per_sec  = 0.0
         self.right_ticks_per_sec = 0.0
+        self.was_turning = False
 
         # --- Publishers ---
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
@@ -109,11 +110,18 @@ class MotorController(Node):
         right_speed = (linear_x + (angular_z * self.wheel_separation / 2.0)) * RIGHT_SPEED_SCALE
 
         # Closed-loop correction: only during pure forward/backward motion.
-        # error > 0 means left is faster → slow left, speed up right.
+        # Skip the first cycle after a turn — stale turn-phase tick rates would
+        # produce a massive error and drive left_speed negative.
         if angular_z == 0.0 and linear_x != 0.0:
-            error = self.left_ticks_per_sec - self.right_ticks_per_sec
-            left_speed  -= STRAIGHT_KP * error
-            right_speed += STRAIGHT_KP * error
+            if not self.was_turning:
+                error = self.left_ticks_per_sec - self.right_ticks_per_sec
+                left_speed  -= STRAIGHT_KP * error
+                right_speed += STRAIGHT_KP * error
+            self.was_turning = False
+        else:
+            self.was_turning = True
+            self.left_ticks_per_sec  = 0.0
+            self.right_ticks_per_sec = 0.0
 
         self.control_motor(left_speed, self.pwm_a, self.ain1, self.ain2)
         self.control_motor(right_speed, self.pwm_b, self.bin1, self.bin2)
