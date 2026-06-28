@@ -49,8 +49,8 @@ class MotorController(Node):
         self.right_encoder = RotaryEncoder(22, 10, max_steps=0)
 
         # --- Robot Parameters ---
-        self.wheel_separation = 0.20   # meters between wheels
-        self.wheel_radius = 0.0325     # meters
+        self.wheel_separation = 0.18   # meters between wheels
+        self.wheel_radius = 0.027      # meters
         self.ticks_per_rev = 20        # adjust for your encoder
 
         # --- Odometry State ---
