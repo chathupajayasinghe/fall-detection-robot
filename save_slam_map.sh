@@ -2,7 +2,7 @@
 set -eo pipefail
 
 ROS_SETUP="/opt/ros/jazzy/setup.bash"
-WS_SETUP="$HOME/ros2_ws/install/setup.bash"
+WS_SETUP="$HOME/fall-detection-robot/install/setup.bash"
 MAP_DIR="$HOME/maps/home_map_final"
 BAG_OUTPUT="$MAP_DIR"
 BAG_PATTERN="$MAP_DIR/*.mcap"

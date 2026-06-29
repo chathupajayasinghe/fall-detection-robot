@@ -8,7 +8,9 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    slam_params_default = os.path.expanduser('~/slam_config.yaml')
+    slam_params_default = os.path.join(
+        get_package_share_directory('robot_driver'), 'config', 'slam_params.yaml'
+    )
 
     declare_slam_params_file = DeclareLaunchArgument(
         'slam_params_file',

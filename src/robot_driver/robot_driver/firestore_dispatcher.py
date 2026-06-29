@@ -12,7 +12,6 @@ from nav2_msgs.action import NavigateToPose
 
 ROOM_COORDINATES = {
     'bedroom':     {'x':  1.0, 'y':  0.5, 'z': 0.0},
-    'kitchen':     {'x': -1.0, 'y':  1.0, 'z': 0.0},
     'bathroom':    {'x':  0.0, 'y': -1.0, 'z': 0.0},
     'living_room': {'x':  2.0, 'y':  0.0, 'z': 0.0},
 }
