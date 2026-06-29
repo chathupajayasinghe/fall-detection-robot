@@ -15,6 +15,8 @@ from gpiozero import Device, PWMOutputDevice, DigitalOutputDevice, RotaryEncoder
 LEFT_SPEED_SCALE  = 1.0
 RIGHT_SPEED_SCALE = 1.0
 
+MIN_PWM = 0.35
+
 # Proportional gain for closed-loop straight-line encoder correction.
 STRAIGHT_KP = 0.001
 
@@ -112,6 +114,10 @@ class MotorController(Node):
         # Closed-loop correction: only during pure forward/backward motion.
         # Skip the first cycle after a turn — stale turn-phase tick rates would
         # produce a massive error and drive left_speed negative.
+        if angular_z != 0.0 and linear_x == 0.0:
+            left_speed  *= 1.5
+            right_speed *= 1.5
+
         if angular_z == 0.0 and linear_x != 0.0:
             if not self.was_turning:
                 error = self.left_ticks_per_sec - self.right_ticks_per_sec
@@ -136,7 +142,10 @@ class MotorController(Node):
             in1.off(); in2.on()
         else:
             in1.on(); in2.off()
-        pwm_dev.value = abs(speed)
+        duty = abs(speed)
+        if 0.01 < duty < MIN_PWM:
+            duty = MIN_PWM
+        pwm_dev.value = duty
 
     def update_odometry(self):
         now = time.time()
