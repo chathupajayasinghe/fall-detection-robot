@@ -180,10 +180,10 @@ class MotorController(Node):
         left_ticks = self.left_encoder.steps
         right_ticks = self.right_encoder.steps
 
-        self.left_ticks_per_sec  = -(left_ticks  - self.last_left)  / dt
+        self.left_ticks_per_sec  = (left_ticks  - self.last_left)  / dt
         self.right_ticks_per_sec = (right_ticks - self.last_right) / dt
 
-        left_dist = -(left_ticks - self.last_left) / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
+        left_dist  = (left_ticks  - self.last_left)  / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
         right_dist = (right_ticks - self.last_right) / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
 
         linear = (right_dist + left_dist) / 2.0
