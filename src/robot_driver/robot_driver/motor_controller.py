@@ -18,7 +18,7 @@ RIGHT_SPEED_SCALE = 1.0
 MIN_PWM = 0.35
 
 # Proportional gain for closed-loop straight-line encoder correction.
-STRAIGHT_KP = 0.001
+STRAIGHT_KP = 0.0001
 
 # Diagonal 6×6 covariance matrices (row-major, 36 elements).
 # Unmeasured axes (z, roll, pitch, lateral velocity) carry 1e9 (effectively unknown).
