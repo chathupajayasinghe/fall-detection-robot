@@ -72,7 +72,7 @@ class MotorController(Node):
         # --- Robot Parameters ---
         self.wheel_separation = 0.18   # meters between wheels
         self.wheel_radius = 0.027      # meters
-        self.ticks_per_rev = 11        # adjust for your encoder
+        self.ticks_per_rev = 335       # adjust for your encoder
 
         # --- Odometry State ---
         self.x = 0.0
