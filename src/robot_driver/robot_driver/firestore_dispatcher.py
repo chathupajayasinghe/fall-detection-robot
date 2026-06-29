@@ -6,6 +6,7 @@ from firebase_admin import credentials, firestore
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
+from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose
 
@@ -91,11 +92,22 @@ class FirestoreDispatcher(Node):
                 self._in_progress.discard(doc_id)
             return
 
-        future = self._action_client.send_goal_async(goal)
-        future.add_done_callback(lambda f: self._on_goal_response(f, doc_id, room))
+        try:
+            future = self._action_client.send_goal_async(goal)
+            future.add_done_callback(lambda f: self._on_goal_response(f, doc_id, room))
+        except Exception as e:
+            self.get_logger().error(f'send_goal_async failed for "{room}": {e}')
+            with self._lock:
+                self._in_progress.discard(doc_id)
 
     def _on_goal_response(self, future, doc_id, room):
-        goal_handle = future.result()
+        try:
+            goal_handle = future.result()
+        except Exception as e:
+            self.get_logger().error(f'Goal send failed for "{room}": {e}')
+            with self._lock:
+                self._in_progress.discard(doc_id)
+            return
         if not goal_handle.accepted:
             self.get_logger().warn(f'Nav2 rejected goal to "{room}"')
             with self._lock:
@@ -106,10 +118,21 @@ class FirestoreDispatcher(Node):
         result_future.add_done_callback(lambda f: self._on_nav_result(f, doc_id, room))
 
     def _on_nav_result(self, future, doc_id, room):
-        result = future.result()
-        self.get_logger().info(
-            f'Arrived at "{room}" (Nav2 status={result.status}), acknowledging alert'
-        )
+        try:
+            result = future.result()
+        except Exception as e:
+            self.get_logger().error(f'Nav2 result error for "{room}": {e}')
+            with self._lock:
+                self._in_progress.discard(doc_id)
+            return
+        if result.status != GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().error(
+                f'Nav2 failed to reach "{room}" (status={result.status}), alert NOT acknowledged'
+            )
+            with self._lock:
+                self._in_progress.discard(doc_id)
+            return
+        self.get_logger().info(f'Arrived at "{room}", acknowledging alert')
         self._acknowledge_alert(doc_id)
 
     def _acknowledge_alert(self, doc_id):
