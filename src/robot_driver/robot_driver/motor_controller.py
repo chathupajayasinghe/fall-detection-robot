@@ -69,7 +69,7 @@ class MotorController(Node):
         # lgpio pin factory registers GPIO edge-detect callbacks for both A/B channels,
         # so .steps is updated in real time by hardware interrupts — not by the odom timer.
         self.left_encoder  = RotaryEncoder(17, 27, max_steps=0, bounce_time=None)
-        self.right_encoder = RotaryEncoder(22, 10, max_steps=0, bounce_time=None)
+        self.right_encoder = RotaryEncoder(10, 22, max_steps=0, bounce_time=None)
 
         # --- Robot Parameters ---
         self.wheel_separation = 0.18   # meters between wheels
@@ -181,10 +181,10 @@ class MotorController(Node):
         right_ticks = self.right_encoder.steps
 
         self.left_ticks_per_sec  = -(left_ticks  - self.last_left)  / dt
-        self.right_ticks_per_sec = -(right_ticks - self.last_right) / dt
+        self.right_ticks_per_sec = (right_ticks - self.last_right) / dt
 
         left_dist = -(left_ticks - self.last_left) / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
-        right_dist = -(right_ticks - self.last_right) / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
+        right_dist = (right_ticks - self.last_right) / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
 
         linear = (right_dist + left_dist) / 2.0
         angular = (right_dist - left_dist) / self.wheel_separation
