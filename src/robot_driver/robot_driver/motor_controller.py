@@ -66,13 +66,15 @@ class MotorController(Node):
         self.bin2  = DigitalOutputDevice(24)
 
         # --- Encoder Pins ---
-        self.left_encoder = RotaryEncoder(17, 27, max_steps=0)
-        self.right_encoder = RotaryEncoder(22, 10, max_steps=0)
+        # lgpio pin factory registers GPIO edge-detect callbacks for both A/B channels,
+        # so .steps is updated in real time by hardware interrupts — not by the odom timer.
+        self.left_encoder  = RotaryEncoder(17, 27, max_steps=0, bounce_time=None)
+        self.right_encoder = RotaryEncoder(22, 10, max_steps=0, bounce_time=None)
 
         # --- Robot Parameters ---
         self.wheel_separation = 0.18   # meters between wheels
         self.wheel_radius = 0.027      # meters
-        self.ticks_per_rev = 335       # adjust for your encoder
+        self.ticks_per_rev = 11        # 11 PPR per motor spec (one motor turn = 11 signals)
 
         # --- Odometry State ---
         self.x = 0.0
@@ -86,6 +88,9 @@ class MotorController(Node):
         self.left_ticks_per_sec  = 0.0
         self.right_ticks_per_sec = 0.0
         self.was_turning = False
+
+        # --- Debug tick logging (every 1 s at 20 Hz) ---
+        self._log_tick = 0
 
         # --- Publishers ---
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
@@ -215,6 +220,13 @@ class MotorController(Node):
         t.transform.translation.z = 0.0
         t.transform.rotation = odom.pose.pose.orientation
         self.tf_broadcaster.sendTransform(t)
+
+        self._log_tick += 1
+        if self._log_tick >= 20:
+            self.get_logger().info(
+                f'Encoder steps — left: {left_ticks}, right: {right_ticks}'
+            )
+            self._log_tick = 0
 
         self.last_left = left_ticks
         self.last_right = right_ticks
