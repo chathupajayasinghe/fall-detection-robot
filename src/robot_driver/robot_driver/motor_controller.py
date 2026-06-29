@@ -20,6 +20,25 @@ MIN_PWM = 0.35
 # Proportional gain for closed-loop straight-line encoder correction.
 STRAIGHT_KP = 0.001
 
+# Diagonal 6×6 covariance matrices (row-major, 36 elements).
+# Unmeasured axes (z, roll, pitch, lateral velocity) carry 1e9 (effectively unknown).
+_POSE_COV = [
+    0.001, 0.0,   0.0, 0.0,   0.0,   0.0,
+    0.0,   0.001, 0.0, 0.0,   0.0,   0.0,
+    0.0,   0.0,   1e9, 0.0,   0.0,   0.0,
+    0.0,   0.0,   0.0, 1e9,   0.0,   0.0,
+    0.0,   0.0,   0.0, 0.0,   1e9,   0.0,
+    0.0,   0.0,   0.0, 0.0,   0.0,   0.001,
+]
+_TWIST_COV = [
+    0.001, 0.0,   0.0, 0.0,   0.0,   0.0,
+    0.0,   1e9,   0.0, 0.0,   0.0,   0.0,
+    0.0,   0.0,   1e9, 0.0,   0.0,   0.0,
+    0.0,   0.0,   0.0, 1e9,   0.0,   0.0,
+    0.0,   0.0,   0.0, 0.0,   1e9,   0.0,
+    0.0,   0.0,   0.0, 0.0,   0.0,   0.001,
+]
+
 class MotorController(Node):
     def __init__(self):
         super().__init__('motor_controller')
@@ -164,6 +183,8 @@ class MotorController(Node):
 
         linear = (right_dist + left_dist) / 2.0
         angular = (right_dist - left_dist) / self.wheel_separation
+        vx = linear / dt
+        wz = angular / dt
 
         self.x += linear * math.cos(self.theta)
         self.y += linear * math.sin(self.theta)
@@ -178,6 +199,10 @@ class MotorController(Node):
         odom.pose.pose.position.y = self.y
         odom.pose.pose.orientation.z = math.sin(self.theta / 2)
         odom.pose.pose.orientation.w = math.cos(self.theta / 2)
+        odom.pose.covariance = _POSE_COV
+        odom.twist.twist.linear.x = vx
+        odom.twist.twist.angular.z = wz
+        odom.twist.covariance = _TWIST_COV
         self.odom_pub.publish(odom)
 
         # Broadcast odom → base_link transform

@@ -31,7 +31,10 @@ class FirestoreDispatcher(Node):
         self._lock = threading.Lock()
 
         cred = credentials.Certificate(CREDENTIAL_PATH)
-        firebase_admin.initialize_app(cred, {'projectId': PROJECT_ID})
+        try:
+            firebase_admin.initialize_app(cred, {'projectId': PROJECT_ID})
+        except ValueError:
+            pass  # app already initialized; safe to reuse on node restart
         self._db = firestore.client()
 
         self._setup_listener()
