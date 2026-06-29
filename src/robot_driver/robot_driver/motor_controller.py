@@ -74,7 +74,7 @@ class MotorController(Node):
         # --- Robot Parameters ---
         self.wheel_separation = 0.18   # meters between wheels
         self.wheel_radius = 0.027      # meters
-        self.ticks_per_rev = 11        # 11 PPR per motor spec (one motor turn = 11 signals)
+        self.ticks_per_rev = 314       # 11 PPR per motor spec (one motor turn = 11 signals)
 
         # --- Odometry State ---
         self.x = 0.0
