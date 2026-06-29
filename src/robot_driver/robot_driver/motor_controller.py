@@ -184,7 +184,7 @@ class MotorController(Node):
         self.right_ticks_per_sec = (right_ticks - self.last_right) / dt
 
         left_dist = -(left_ticks - self.last_left) / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
-        right_dist = -(right_ticks - self.last_right) / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
+        right_dist = (right_ticks - self.last_right) / self.ticks_per_rev * (2 * math.pi * self.wheel_radius)
 
         linear = (right_dist + left_dist) / 2.0
         angular = (right_dist - left_dist) / self.wheel_separation
