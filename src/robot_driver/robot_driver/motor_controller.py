@@ -13,7 +13,7 @@ os.environ["GPIOZERO_PIN_FACTORY"] = "lgpio"
 from gpiozero import Device, PWMOutputDevice, DigitalOutputDevice, RotaryEncoder
 
 LEFT_SPEED_SCALE  = 1.0
-RIGHT_SPEED_SCALE = 1.0
+RIGHT_SPEED_SCALE = 1.0 / 1.034
 
 MIN_PWM = 0.35
 
