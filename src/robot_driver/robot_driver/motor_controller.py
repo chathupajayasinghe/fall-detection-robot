@@ -13,7 +13,7 @@ os.environ["GPIOZERO_PIN_FACTORY"] = "lgpio"
 from gpiozero import Device, PWMOutputDevice, DigitalOutputDevice, RotaryEncoder
 
 LEFT_SPEED_SCALE  = 1.0
-RIGHT_SPEED_SCALE = 1.0 / 1.034
+RIGHT_SPEED_SCALE = 1.0
 
 MIN_PWM = 0.35
 
@@ -74,7 +74,7 @@ class MotorController(Node):
         # --- Robot Parameters ---
         self.wheel_separation = 0.18   # meters between wheels
         self.wheel_radius = 0.027      # meters
-        self.ticks_per_rev = 229       # 11 PPR per motor spec (one motor turn = 11 signals)
+        self.ticks_per_rev = 442       # 11 PPR per motor spec (one motor turn = 11 signals)
 
         # --- Odometry State ---
         self.x = 0.0
