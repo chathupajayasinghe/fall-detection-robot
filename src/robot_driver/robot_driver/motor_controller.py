@@ -89,6 +89,10 @@ class MotorController(Node):
         self.right_ticks_per_sec = 0.0
         self.was_turning = False
 
+        # --- Command timeout ---
+        self.last_cmd_time = time.time()
+        self.cmd_timeout = 0.5  # seconds
+
         # --- Debug tick logging (every 1 s at 20 Hz) ---
         self._log_tick = 0
 
@@ -102,6 +106,9 @@ class MotorController(Node):
 
         # --- Timer for odometry ---
         self.create_timer(0.05, self.update_odometry)
+
+        # --- Timer for cmd_vel timeout watchdog ---
+        self.create_timer(0.05, self.check_cmd_timeout)
 
         self.get_logger().info('🤖 Motor+Odometry Node Ready — Pins: 12,5,6,13,23,24')
 
@@ -130,6 +137,7 @@ class MotorController(Node):
                     raise
 
     def listener_callback(self, msg):
+        self.last_cmd_time = time.time()
         linear_x  = msg.linear.x
         angular_z = msg.angular.z
         left_speed  = (linear_x - (angular_z * self.wheel_separation / 2.0)) * LEFT_SPEED_SCALE
@@ -155,6 +163,11 @@ class MotorController(Node):
 
         self.control_motor(left_speed, self.pwm_a, self.ain1, self.ain2)
         self.control_motor(right_speed, self.pwm_b, self.bin1, self.bin2)
+
+    def check_cmd_timeout(self):
+        if time.time() - self.last_cmd_time > self.cmd_timeout:
+            self.control_motor(0.0, self.pwm_a, self.ain1, self.ain2)
+            self.control_motor(0.0, self.pwm_b, self.bin1, self.bin2)
 
     def control_motor(self, speed, pwm_dev, in1, in2):
         speed = max(min(speed, 1.0), -1.0)
