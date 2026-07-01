@@ -7,10 +7,10 @@ from nav2_msgs.action import NavigateToPose
 from geometry_msgs.msg import PoseStamped
 
 WAYPOINTS = [
-    (0.5, 0.0, 0.0),
-    (1.0, 0.0, 0.0),
-    (1.0, 0.5, 1.57),
-    (0.5, 0.5, 3.14),
+    (0.0, 0.0, 0.0),
+    (0.608, -0.925, 0.0),
+    (0.354, -1.599, 0.0),
+    (-1.051, -1.053, 0.0),
 ]
 
 class WaypointPatrol(Node):
