@@ -1,7 +1,7 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -20,8 +20,6 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file')
 
     return LaunchDescription([
-        SetEnvironmentVariable(name='RPLIDAR_SERIAL_PORT', value='/dev/ttyUSB0'),
-
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('map', default_value=default_map),
         DeclareLaunchArgument('params_file', default_value=default_params),
@@ -57,11 +55,8 @@ def generate_launch_description():
             package='nav2_controller',
             executable='controller_server',
             output='screen',
-            parameters=[params_file, {
-                'use_sim_time': False,
-                'controller_plugins': ['FollowPath'],
-                'FollowPath.plugin': 'nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController',
-            }],
+            parameters=[params_file, {'use_sim_time': use_sim_time}],
+            remappings=[('cmd_vel', 'cmd_vel_nav')],
         ),
         Node(
             package='nav2_smoother',
@@ -103,6 +98,7 @@ def generate_launch_description():
             name='velocity_smoother',
             output='screen',
             parameters=[params_file, {'use_sim_time': use_sim_time}],
+            remappings=[('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel')],
         ),
         Node(
             package='nav2_lifecycle_manager',
