@@ -42,7 +42,7 @@ def generate_launch_description():
             launch_arguments={
                 'map': map_yaml_file,
                 'use_sim_time': use_sim_time,
-                'params_file': PathJoinSubstitution(
+                'amcl_params_file': PathJoinSubstitution(
                     [FindPackageShare('robot_driver'), 'config', 'amcl_params.yaml']
                 ),
             }.items(),

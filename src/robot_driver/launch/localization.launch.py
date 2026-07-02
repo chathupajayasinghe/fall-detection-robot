@@ -14,12 +14,12 @@ def generate_launch_description():
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     map_yaml_file = LaunchConfiguration('map')
-    params_file = LaunchConfiguration('params_file')
+    params_file = LaunchConfiguration('amcl_params_file')
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('map', default_value=default_map),
-        DeclareLaunchArgument('params_file', default_value=default_params),
+        DeclareLaunchArgument('amcl_params_file', default_value=default_params),
 
         Node(
             package='nav2_map_server',
