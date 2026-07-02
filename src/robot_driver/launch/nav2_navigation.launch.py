@@ -108,6 +108,9 @@ def generate_launch_description():
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'autostart': True,
+                'bond_timeout': 60.0,
+                'attempt_respawn_reconnection': True,
+                'bond_respawn_max_duration': 30.0,
                 'node_names': [
                     'controller_server',
                     'smoother_server',
