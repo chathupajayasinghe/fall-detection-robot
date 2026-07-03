@@ -179,9 +179,7 @@ class MotorController(Node):
             in1.off(); in2.on()
         else:
             in1.on(); in2.off()
-        duty = abs(speed)
-        if 0.01 < duty < MIN_PWM:
-            duty = MIN_PWM
+        duty = MIN_PWM + abs(speed) * (1.0 - MIN_PWM)
         pwm_dev.value = duty
 
     def update_odometry(self):
