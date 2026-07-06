@@ -39,10 +39,10 @@ def generate_launch_description():
     
     # 2. Include the LIDAR driver with your verified configurations
     lidar_node = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(rplidar_launch_dir, 'rplidar_a1_launch.py')),
+        PythonLaunchDescriptionSource(os.path.join(rplidar_launch_dir, 'rplidar_c1_launch.py')),
         launch_arguments={
             'serial_port': '/dev/rplidar',
-            'serial_baudrate': '115200',
+            'serial_baudrate': '460800',
             'scan_mode': 'Standard',
             'frame_id': 'laser'
         }.items()
