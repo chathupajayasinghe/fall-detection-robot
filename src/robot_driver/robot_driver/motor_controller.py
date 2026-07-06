@@ -18,7 +18,7 @@ RIGHT_SPEED_SCALE = 1.0
 MIN_PWM = 0.35
 
 # Proportional gain for closed-loop straight-line encoder correction.
-STRAIGHT_KP = 0.0001
+STRAIGHT_KP = 0.0
 
 # Diagonal 6×6 covariance matrices (row-major, 36 elements).
 # Unmeasured axes (z, roll, pitch, lateral velocity) carry 1e9 (effectively unknown).
@@ -155,6 +155,16 @@ class MotorController(Node):
                 error = self.left_ticks_per_sec - self.right_ticks_per_sec
                 left_speed  -= STRAIGHT_KP * error
                 right_speed += STRAIGHT_KP * error
+                # Correction must not flip either wheel's direction relative
+                # to the commanded linear_x, or the deadband rescale in
+                # control_motor will spin that wheel in reverse and pivot
+                # the robot instead of driving straight.
+                if linear_x > 0.0:
+                    left_speed  = max(left_speed, 0.0)
+                    right_speed = max(right_speed, 0.0)
+                else:
+                    left_speed  = min(left_speed, 0.0)
+                    right_speed = min(right_speed, 0.0)
             self.was_turning = False
         else:
             self.was_turning = True
