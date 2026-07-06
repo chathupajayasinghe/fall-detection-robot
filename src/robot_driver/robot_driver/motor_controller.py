@@ -20,6 +20,9 @@ MIN_PWM = 0.35
 # Proportional gain for closed-loop straight-line encoder correction.
 STRAIGHT_KP = 0.0
 
+# Fixed open-loop trim: right side runs slightly faster than left per calibration.
+RIGHT_TRIM = 0.97
+
 # Diagonal 6×6 covariance matrices (row-major, 36 elements).
 # Unmeasured axes (z, roll, pitch, lateral velocity) carry 1e9 (effectively unknown).
 _POSE_COV = [
@@ -170,6 +173,8 @@ class MotorController(Node):
             self.was_turning = True
             self.left_ticks_per_sec  = 0.0
             self.right_ticks_per_sec = 0.0
+
+        right_speed *= RIGHT_TRIM
 
         self.control_motor(left_speed, self.pwm_a, self.ain1, self.ain2)
         self.control_motor(right_speed, self.pwm_b, self.bin1, self.bin2)
