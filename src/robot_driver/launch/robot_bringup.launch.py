@@ -32,19 +32,22 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     start_slam_toolbox = LaunchConfiguration('start_slam_toolbox')
 
-    # 1. Path to the standard RPLidar launch file
-    rplidar_launch_dir = os.path.join(
-        get_package_share_directory('rplidar_ros'), 'launch'
-    )
-    
-    # 2. Include the LIDAR driver with your verified configurations
-    lidar_node = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(rplidar_launch_dir, 'rplidar_c1_launch.py')),
-        launch_arguments={
+    # 2. LIDAR driver as a plain Node (not an Include) so respawn can be set directly.
+    lidar_node = Node(
+        package='rplidar_ros',
+        executable='rplidar_node',
+        name='rplidar_node',
+        parameters=[{
+            'channel_type': 'serial',
             'serial_port': '/dev/rplidar',
             'serial_baudrate': '460800',
-            'frame_id': 'laser'
-        }.items()
+            'frame_id': 'laser',
+            'inverted': 'false',
+            'angle_compensate': 'true',
+        }],
+        output='screen',
+        respawn=True,
+        respawn_delay=2.0,
     )
 
     # 3. Static Transform Publisher (Tells ROS2 the LIDAR is centered, 10cm above base_link)

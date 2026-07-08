@@ -24,16 +24,6 @@ def generate_launch_description():
         DeclareLaunchArgument('map', default_value=default_map),
         DeclareLaunchArgument('params_file', default_value=default_params),
 
-        # Hardware: LIDAR + motors + static TF
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(pkg_share, 'launch', 'robot_bringup.launch.py')
-            ),
-            launch_arguments={
-                'start_slam_toolbox': 'false'
-            }.items(),
-        ),
-
         # AMCL + map server
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
