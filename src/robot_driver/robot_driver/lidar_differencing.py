@@ -143,7 +143,7 @@ class LidarDifferencing(Node):
             r = live_ranges[i]
             if not np.isfinite(r) or r <= 0.0:
                 continue
-            angle = scan.angle_min + i * scan.angle_increment
+            angle = scan.angle_min + i * scan.angle_increment + math.pi
             xs.append(r * math.cos(angle))
             ys.append(r * math.sin(angle))
 
