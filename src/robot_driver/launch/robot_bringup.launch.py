@@ -66,7 +66,15 @@ def generate_launch_description():
         output='screen'
     )
 
-    # 5. slam_toolbox online async node with autostart and lifecycle activation
+    # 5. Welfare sensor node (PIR + RCWL movement check)
+    welfare_sensor_node = Node(
+        package='robot_driver',
+        executable='welfare_sensor',
+        name='welfare_sensor',
+        output='screen'
+    )
+
+    # 6. slam_toolbox online async node with autostart and lifecycle activation
     slam_toolbox_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -91,5 +99,6 @@ def generate_launch_description():
         lidar_node,
         static_tf_node,
         motor_node,
+        welfare_sensor_node,
         slam_toolbox_launch
     ])

@@ -35,6 +35,7 @@ setup(
             'firestore_dispatcher = robot_driver.firestore_dispatcher:main',
             'waypoint_patrol = robot_driver.waypoint_patrol:main',
             'lidar_differencing = robot_driver.lidar_differencing:main',
+            'welfare_sensor = robot_driver.welfare_sensor:main',
         ],
     },
 )
