@@ -12,6 +12,10 @@ from geometry_msgs.msg import PointStamped
 REFERENCE_SCAN_PATH = os.path.expanduser('~/maps/reference_scan.npy')
 DIFF_THRESHOLD = 0.3  # meters closer than reference to count as a new obstacle
 
+MIN_CLUSTER_POINTS = 12  # fewer beams than this is noise/small objects (e.g. a backpack at ~9)
+MIN_PERSON_SIZE = 0.3  # meters, smallest plausible physical span of a person-sized cluster
+MAX_PERSON_SIZE = 2.0  # meters, largest plausible physical span of a person-sized cluster
+
 
 class LidarDifferencing(Node):
     def __init__(self):
@@ -86,7 +90,7 @@ class LidarDifferencing(Node):
             reference_ranges[valid] - live_ranges[valid]
         ) > DIFF_THRESHOLD
 
-        cluster = self.largest_cluster(is_new_obstacle)
+        cluster = self.select_person_cluster(is_new_obstacle, live_ranges, scan)
         if cluster is None:
             self.get_logger().info('No new obstacle found in live scan.')
             return
@@ -109,7 +113,7 @@ class LidarDifferencing(Node):
             f'Person candidate detected at base_link ({x:.2f}, {y:.2f}), '
             f'cluster size={len(cluster)}')
 
-    def largest_cluster(self, is_new_obstacle):
+    def select_person_cluster(self, is_new_obstacle, live_ranges, scan: LaserScan):
         n = len(is_new_obstacle)
         if not np.any(is_new_obstacle):
             return None
@@ -134,7 +138,44 @@ class LidarDifferencing(Node):
         if not clusters:
             return None
 
-        return max(clusters, key=len)
+        candidates = []
+        for cluster in clusters:
+            if len(cluster) < MIN_CLUSTER_POINTS:
+                continue
+
+            points = self.cluster_points(cluster, live_ranges, scan)
+            span = self.cluster_span(points)
+            if span is None or span < MIN_PERSON_SIZE or span > MAX_PERSON_SIZE:
+                continue
+
+            candidates.append(cluster)
+
+        if not candidates:
+            return None
+
+        return max(candidates, key=len)
+
+    def cluster_points(self, cluster_indices, live_ranges, scan: LaserScan):
+        points = []
+        for i in cluster_indices:
+            r = live_ranges[i]
+            if not np.isfinite(r) or r <= 0.0:
+                continue
+            angle = scan.angle_min + i * scan.angle_increment + math.pi
+            points.append((r * math.cos(angle), r * math.sin(angle)))
+        return points
+
+    def cluster_span(self, points):
+        if len(points) < 2:
+            return None
+
+        max_dist = 0.0
+        for idx, (x1, y1) in enumerate(points):
+            for x2, y2 in points[idx + 1:]:
+                dist = math.hypot(x2 - x1, y2 - y1)
+                if dist > max_dist:
+                    max_dist = dist
+        return max_dist
 
     def cluster_centroid(self, cluster_indices, live_ranges, scan: LaserScan):
         xs = []
