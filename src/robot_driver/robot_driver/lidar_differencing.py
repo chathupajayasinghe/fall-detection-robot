@@ -12,7 +12,7 @@ from geometry_msgs.msg import PointStamped
 REFERENCE_SCAN_PATH = os.path.expanduser('~/maps/reference_scan.npy')
 DIFF_THRESHOLD = 0.3  # meters closer than reference to count as a new obstacle
 
-MIN_CLUSTER_POINTS = 12  # fewer beams than this is noise/small objects (e.g. a backpack at ~9)
+MIN_CLUSTER_POINTS = 8  # fewer beams than this is noise; span filter still rejects small objects
 MIN_PERSON_SIZE = 0.3  # meters, smallest plausible physical span of a person-sized cluster
 MAX_PERSON_SIZE = 2.0  # meters, largest plausible physical span of a person-sized cluster
 
