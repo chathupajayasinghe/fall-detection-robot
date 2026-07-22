@@ -76,7 +76,7 @@ class MotorController(Node):
 
         # --- Robot Parameters ---
         self.wheel_separation = 0.20   # meters between wheels
-        self.wheel_radius = 0.025      # meters (encoder-based calibration: ~1360 ticks/m over two 1.0m tape-measured drives)
+        self.wheel_radius = 0.027      # meters (encoder calibration: 1343 and 1389 ticks over two 1.0 m tape-measured drives (~1360 ticks/m))
         self.ticks_per_rev = 235       # 11 PPR per motor spec (one motor turn = 11 signals)
 
         # --- Odometry State ---
