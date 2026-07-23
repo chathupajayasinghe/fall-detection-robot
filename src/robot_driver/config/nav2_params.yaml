@@ -37,7 +37,7 @@ controller_server:
       use_velocity_scaled_lookahead_dist: false
       min_approach_linear_velocity: 0.05
       use_rotate_to_heading: true
-      rotate_to_heading_angular_vel: 1.5
+      rotate_to_heading_angular_vel: 1.0
       rotate_to_heading_min_angle: 1.0
       max_angular_accel: 1.5
       transform_tolerance: 0.1
