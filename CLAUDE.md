@@ -49,7 +49,7 @@ Two ROS 2 packages under `src/`.
 
 ### `robot_driver` (Python, `ament_python`)
 
-Custom package for this robot. **Six** nodes, all registered as console scripts in `setup.py`:
+Custom package for this robot. **Five** nodes, all registered as console scripts in `setup.py`:
 
 - **MotorController** (`motor_controller.py`) — the primary runtime node, started by bringup.
   Subscribes `/cmd_vel` (Twist), drives left/right motors via `gpiozero` PWM, reads quadrature
@@ -68,11 +68,6 @@ Custom package for this robot. **Six** nodes, all registered as console scripts 
   the person → `/welfare_check` → write the verdict back to Firestore.
 - **WaypointPatrol** (`waypoint_patrol.py`) — standalone Nav2 waypoint loop. Not launched by
   any launch file; run manually for testing.
-- **OdometryPublisher** (`odom_publisher.py`) — ⚠️ **legacy, do not use.** Encoder-only
-  odometry superseded by MotorController. Its constants are stale (`wheel_radius 0.0325`,
-  `ticks_per_rev 20`), its right encoder channels are swapped relative to MotorController, and
-  it publishes to the same `/odom` topic — so running it produces confidently wrong data.
-  Slated for deletion.
 
 > **Nav2 is not started by bringup.** `robot_bringup.launch.py` owns hardware only.
 > Navigation is a separate launch file so the robot can be brought up without it.
