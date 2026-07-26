@@ -34,15 +34,21 @@ from tf2_geometry_msgs import do_transform_point
 
 
 # ############################################################################
-# UNSET PLACEHOLDER - MUST BE CONFIGURED PER DEPLOYMENT ROOM
+# ENVIRONMENT-SPECIFIC - MUST BE RE-SURVEYED FOR THE FACULTY DEMO ROOM
 #
 # Map-frame coordinates the robot drives to before it starts looking for the
-# person. The values below are placeholders, not a surveyed position: until they
-# are replaced with real coordinates for the room this robot is deployed in,
-# every fall alert sends the robot to an arbitrary point and the person search
-# runs from the wrong place.
+# person. Surveyed against the home map: reached 10/10 in the straight-path
+# navigation campaign.
+#
+# These coordinates are only meaningful against the map they were surveyed in.
+# Running against a different map - including the faculty demo room - sends the
+# robot to an arbitrary point and the person search then runs from the wrong
+# place. Re-survey before any demo on an unfamiliar map.
+#
+# See also: the reference scan used by lidar_differencing is compared beam-by-
+# beam by index, so it must be captured from this same pose to be meaningful.
 # ############################################################################
-SCAN_POINT = {'x': 1.0, 'y': 0.5}
+SCAN_POINT = {'x': 1.5, 'y': 0.0}
 
 APPROACH_DISTANCE = 0.8  # meters to stop short of the detected person
 PERSON_LOCATION_TIMEOUT = 15.0  # seconds to wait for /person_location after /find_person
