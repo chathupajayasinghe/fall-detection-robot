@@ -1,3 +1,19 @@
+"""Cloud fall-alert dispatcher: Firestore alert -> robot welfare check.
+
+Watches a Firestore ``fall_alerts`` collection for documents in the ``pending``
+state and works exactly one at a time, since the robot can only be in one place.
+Each alert drives a fixed sequence:
+
+    navigate to SCAN_POINT
+      -> /find_person, wait for /person_location
+      -> navigate to an approach pose APPROACH_DISTANCE short of the person
+      -> /welfare_check, wait for /welfare_result
+      -> write the verdict back to the Firestore document
+
+Progress is tracked in ``self._active`` as a stage plus a deadline; the stage
+guards against stale async callbacks from alerts that have already been dropped,
+and ``_check_timeouts`` finalises anything that stalls.
+"""
 import json
 import math
 import queue
@@ -17,7 +33,15 @@ import tf2_ros
 from tf2_geometry_msgs import do_transform_point
 
 
-# Map-frame coordinates of the single room's scan point. Set per environment.
+# ############################################################################
+# UNSET PLACEHOLDER - MUST BE CONFIGURED PER DEPLOYMENT ROOM
+#
+# Map-frame coordinates the robot drives to before it starts looking for the
+# person. The values below are placeholders, not a surveyed position: until they
+# are replaced with real coordinates for the room this robot is deployed in,
+# every fall alert sends the robot to an arbitrary point and the person search
+# runs from the wrong place.
+# ############################################################################
 SCAN_POINT = {'x': 1.0, 'y': 0.5}
 
 APPROACH_DISTANCE = 0.8  # meters to stop short of the detected person
@@ -42,10 +66,34 @@ PROJECT_ID = 'fall-detector-app-3319d'
 
 
 class FirestoreDispatcher(Node):
+    """Turns pending Firestore fall alerts into navigate-and-check missions."""
 
     def __init__(self):
         super().__init__('firestore_dispatcher')
+
+        self._setup_nav_client()
+        self._setup_alert_state()
+        self._setup_tf()
+        self._setup_interfaces()
+        self._setup_firestore()
+        self._setup_timers()
+
+        self.get_logger().info('FirestoreDispatcher ready, listening for fall alerts')
+
+    # ------------------------------------------------------------------
+    # Setup
+    # ------------------------------------------------------------------
+
+    def _setup_nav_client(self):
+        """Create the Nav2 action client used for every navigation leg."""
         self._action_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+
+    def _setup_alert_state(self):
+        """Initialise the alert queue and the single-active-alert bookkeeping.
+
+        The queue is filled from a Firestore background thread, hence the lock
+        around the in-progress set.
+        """
         self._alert_queue = queue.Queue()
         self._in_progress = set()
         self._lock = threading.Lock()
@@ -54,9 +102,13 @@ class FirestoreDispatcher(Node):
         self._active = None
         self._nav_failure_counts = {}
 
+    def _setup_tf(self):
+        """Start the TF listener used to place the person in the map frame."""
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
+    def _setup_interfaces(self):
+        """Create the search/check triggers and subscribe to their results."""
         self.find_person_pub = self.create_publisher(Empty, '/find_person', 10)
         self.welfare_check_pub = self.create_publisher(Empty, '/welfare_check', 10)
 
@@ -65,6 +117,8 @@ class FirestoreDispatcher(Node):
         self.create_subscription(
             String, '/welfare_result', self._on_welfare_result, 10)
 
+    def _setup_firestore(self):
+        """Authenticate to Firestore and start watching for pending alerts."""
         cred = credentials.Certificate(CREDENTIAL_PATH)
         try:
             firebase_admin.initialize_app(cred, {'projectId': PROJECT_ID})
@@ -73,15 +127,19 @@ class FirestoreDispatcher(Node):
         self._db = firestore.client()
 
         self._setup_listener()
+
+    def _setup_timers(self):
+        """Start the queue pump and the stage deadline checker."""
         self.create_timer(1.0, self._process_queue)
         self.create_timer(0.5, self._check_timeouts)
-        self.get_logger().info('FirestoreDispatcher ready, listening for fall alerts')
 
     def _setup_listener(self):
+        """Subscribe to the Firestore query for pending fall alerts."""
         query = self._db.collection('fall_alerts').where('status', '==', 'pending')
         self._watch = query.on_snapshot(self._on_snapshot)
 
     def _on_snapshot(self, col_snapshot, changes, read_time):
+        """Enqueue newly pending alerts. Runs on a Firestore background thread."""
         for change in changes:
             if change.type.name in ('ADDED', 'MODIFIED'):
                 doc = change.document
@@ -90,6 +148,12 @@ class FirestoreDispatcher(Node):
                     self._alert_queue.put((doc.id, data))
 
     def _process_queue(self):
+        """Start working the next queued alert, if the robot is free.
+
+        KNOWN ISSUE: the alert is removed from the queue before the in-progress
+        check below, so an alert that is already in progress is silently dropped
+        rather than re-queued.
+        """
         if self._active is not None:
             return  # already working an alert
 
@@ -125,6 +189,12 @@ class FirestoreDispatcher(Node):
     # ------------------------------------------------------------------
 
     def _navigate(self, doc_id, x, y, yaw, on_success, on_failure):
+        """Send a NavigateToPose goal, routing the outcome to the given callbacks.
+
+        KNOWN ISSUE: wait_for_server blocks here for up to NAV_SERVER_WAIT_TIMEOUT
+        inside a timer callback, freezing every other callback on this node
+        meanwhile.
+        """
         pose = PoseStamped()
         pose.header.frame_id = 'map'
         pose.header.stamp = self.get_clock().now().to_msg()
@@ -151,6 +221,7 @@ class FirestoreDispatcher(Node):
             on_failure(doc_id, f'send_goal_async exception: {e}')
 
     def _on_goal_response(self, future, doc_id, on_success, on_failure):
+        """Handle Nav2 accepting or rejecting the goal."""
         try:
             goal_handle = future.result()
         except Exception as e:
@@ -167,6 +238,7 @@ class FirestoreDispatcher(Node):
             lambda f: self._on_nav_result(f, doc_id, on_success, on_failure))
 
     def _on_nav_result(self, future, doc_id, on_success, on_failure):
+        """Handle the completed navigation, succeeding only on STATUS_SUCCEEDED."""
         try:
             result = future.result()
         except Exception as e:
@@ -180,6 +252,12 @@ class FirestoreDispatcher(Node):
         on_success(doc_id)
 
     def _on_nav_failure(self, doc_id, reason):
+        """Count a navigation failure, giving up on the alert past MAX_NAV_FAILURES.
+
+        KNOWN ISSUE: on attempts below the limit the document is left 'pending'
+        but nothing re-enqueues it, and _on_snapshot only fires on document
+        change - so the alert stalls and the retry budget is never reached.
+        """
         count = self._nav_failure_counts.get(doc_id, 0) + 1
         self._nav_failure_counts[doc_id] = count
 
@@ -201,6 +279,7 @@ class FirestoreDispatcher(Node):
     # ------------------------------------------------------------------
 
     def _on_scan_point_reached(self, doc_id):
+        """Trigger the person search now the robot is at the scan point."""
         active = self._active
         if active is None or active['doc_id'] != doc_id:
             return  # stale callback from an alert we've already dropped
@@ -211,6 +290,7 @@ class FirestoreDispatcher(Node):
         active['deadline'] = time.time() + PERSON_LOCATION_TIMEOUT
 
     def _on_person_location(self, msg: PointStamped):
+        """Navigate to an approach pose once the person has been located."""
         active = self._active
         if active is None or active['stage'] != STAGE_AWAITING_PERSON:
             return  # not expecting this right now
@@ -236,6 +316,12 @@ class FirestoreDispatcher(Node):
         )
 
     def _compute_approach_pose(self, person_point: PointStamped):
+        """Map-frame pose APPROACH_DISTANCE short of the person, facing them.
+
+        Stopping short rather than driving onto the reported point keeps the
+        robot from colliding with someone on the floor, and leaves the sensors
+        at a workable distance for the welfare check.
+        """
         try:
             transform = self.tf_buffer.lookup_transform(
                 'map', person_point.header.frame_id, person_point.header.stamp,
@@ -266,6 +352,7 @@ class FirestoreDispatcher(Node):
     # ------------------------------------------------------------------
 
     def _on_approach_reached(self, doc_id):
+        """Trigger the welfare check now the robot is beside the person."""
         active = self._active
         if active is None or active['doc_id'] != doc_id:
             return
@@ -276,6 +363,11 @@ class FirestoreDispatcher(Node):
         active['deadline'] = time.time() + WELFARE_RESULT_TIMEOUT
 
     def _on_welfare_result(self, msg: String):
+        """Record the welfare verdict against the alert, retrying once on warmup.
+
+        An unrecognised verdict is treated as 'confirmed_uncertain' rather than
+        dropped, so an alert is never silently left unresolved.
+        """
         active = self._active
         if active is None or active['stage'] != STAGE_AWAITING_WELFARE:
             return
@@ -316,6 +408,11 @@ class FirestoreDispatcher(Node):
         self._finalize_alert(doc_id, status)
 
     def _schedule_welfare_retry(self, doc_id):
+        """Re-trigger the welfare check once, after the sensor has had time to warm up.
+
+        KNOWN ISSUE: the one-shot timer is cancelled but never destroyed, so a
+        Timer object accumulates on the node for each retry.
+        """
         holder = {}
 
         def _retry():
@@ -335,6 +432,7 @@ class FirestoreDispatcher(Node):
     # ------------------------------------------------------------------
 
     def _check_timeouts(self):
+        """Finalise the active alert if its current stage has passed its deadline."""
         active = self._active
         if active is None or active['deadline'] is None:
             return
@@ -354,6 +452,11 @@ class FirestoreDispatcher(Node):
     # ------------------------------------------------------------------
 
     def _finalize_alert(self, doc_id, status):
+        """Write the final status to Firestore and release the robot.
+
+        The robot is freed in the finally block regardless of whether the
+        Firestore write succeeded, so a cloud outage cannot wedge the dispatcher.
+        """
         try:
             self._db.collection('fall_alerts').document(doc_id).update({'status': status})
             self.get_logger().info(f'Alert {doc_id} marked as "{status}" in Firestore')
@@ -364,6 +467,7 @@ class FirestoreDispatcher(Node):
             self._clear_active(doc_id)
 
     def _clear_active(self, doc_id):
+        """Release the alert so the next queued one can be worked."""
         with self._lock:
             self._in_progress.discard(doc_id)
         if self._active is not None and self._active['doc_id'] == doc_id:
