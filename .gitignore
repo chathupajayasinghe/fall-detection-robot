@@ -1,3 +1,7 @@
 build/
 install/
 log/
+
+# Python bytecode caches — regenerated on every run, never useful in the repo
+__pycache__/
+*.py[cod]
