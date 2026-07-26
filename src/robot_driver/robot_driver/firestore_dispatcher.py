@@ -148,12 +148,7 @@ class FirestoreDispatcher(Node):
                     self._alert_queue.put((doc.id, data))
 
     def _process_queue(self):
-        """Start working the next queued alert, if the robot is free.
-
-        KNOWN ISSUE: the alert is removed from the queue before the in-progress
-        check below, so an alert that is already in progress is silently dropped
-        rather than re-queued.
-        """
+        """Start working the next queued alert, if the robot is free."""
         if self._active is not None:
             return  # already working an alert
 
@@ -162,8 +157,17 @@ class FirestoreDispatcher(Node):
         except queue.Empty:
             return
 
+        if not self._alert_still_pending(doc_id):
+            self._nav_failure_counts.pop(doc_id, None)
+            return
+
         with self._lock:
             if doc_id in self._in_progress:
+                # Already being worked. Put it back rather than dropping it -
+                # losing a fall alert is the worst outcome this node has.
+                self._alert_queue.put((doc_id, data))
+                self.get_logger().warn(
+                    f'Alert {doc_id} is already in progress; re-queued')
                 return
             self._in_progress.add(doc_id)
 
@@ -171,6 +175,7 @@ class FirestoreDispatcher(Node):
         self._active = {
             'doc_id': doc_id,
             'room': room,
+            'data': data,  # retained so a failed attempt can be re-queued intact
             'stage': None,
             'deadline': None,
         }
@@ -183,6 +188,42 @@ class FirestoreDispatcher(Node):
             on_success=self._on_scan_point_reached,
             on_failure=self._on_nav_failure,
         )
+
+    def _alert_still_pending(self, doc_id):
+        """Re-read the document's status, so a stale queue entry is not worked twice.
+
+        _on_snapshot fires on both ADDED and MODIFIED, so the same document can
+        be enqueued more than once while its status is still 'pending'. By the
+        time a duplicate reaches the front of the queue the alert may already
+        have been resolved, and without this check the robot would drive the
+        whole mission again for an alert that is already closed.
+
+        Fails open: if the read itself fails, the alert is worked anyway.
+        Repeating an alert is recoverable; ignoring a genuine fall alert is not.
+
+        Note this is a synchronous Firestore read inside a timer callback, so it
+        blocks the executor for the duration of the round trip.
+        """
+        try:
+            snapshot = self._db.collection('fall_alerts').document(doc_id).get()
+        except Exception as e:
+            self.get_logger().error(
+                f'Could not re-read status for alert {doc_id} ({e}); working it anyway')
+            return True
+
+        if not snapshot.exists:
+            self.get_logger().warn(
+                f'Alert {doc_id} no longer exists in Firestore; skipping queue entry')
+            return False
+
+        status = (snapshot.to_dict() or {}).get('status')
+        if status != 'pending':
+            self.get_logger().info(
+                f'Alert {doc_id} is now "{status}", not pending; '
+                'skipping stale queue entry')
+            return False
+
+        return True
 
     # ------------------------------------------------------------------
     # Nav2 helpers
@@ -254,9 +295,11 @@ class FirestoreDispatcher(Node):
     def _on_nav_failure(self, doc_id, reason):
         """Count a navigation failure, giving up on the alert past MAX_NAV_FAILURES.
 
-        KNOWN ISSUE: on attempts below the limit the document is left 'pending'
-        but nothing re-enqueues it, and _on_snapshot only fires on document
-        change - so the alert stalls and the retry budget is never reached.
+        Below the limit the alert is put back on the queue so the next
+        _process_queue tick retries it. Leaving the Firestore document 'pending'
+        is not sufficient on its own: _on_snapshot only fires when a document
+        changes, so an untouched pending document is never re-delivered and the
+        alert would stall with its retry budget unspent.
         """
         count = self._nav_failure_counts.get(doc_id, 0) + 1
         self._nav_failure_counts[doc_id] = count
@@ -272,7 +315,14 @@ class FirestoreDispatcher(Node):
         # Leave the Firestore doc as 'pending' so it can be retried; just stop working it.
         self.get_logger().error(
             f'Navigation failed for alert {doc_id} (attempt {count}/{MAX_NAV_FAILURES}): {reason}')
+
+        active = self._active
+        data = active['data'] if active is not None and active['doc_id'] == doc_id else {}
+
+        # Release the alert before re-queuing, so the retry is not rejected by
+        # the in-progress guard in _process_queue.
         self._clear_active(doc_id)
+        self._alert_queue.put((doc_id, data))
 
     # ------------------------------------------------------------------
     # Stage 1: scan point -> person search
