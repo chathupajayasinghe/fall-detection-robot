@@ -461,7 +461,13 @@ class FirestoreDispatcher(Node):
                 'treating as confirmed_uncertain')
             status = 'confirmed_uncertain'
 
-        self._finalize_alert(doc_id, status)
+        # Pass the per-sensor readings through so the caregiver app can show
+        # what the verdict was actually based on - the two sensors disagree
+        # often enough that the verdict alone hides useful detail.
+        self._finalize_alert(doc_id, status, extra={
+            'welfarePir': bool(payload.get('pir')),
+            'welfareRcwl': bool(payload.get('rcwl')),
+        })
 
     def _schedule_welfare_retry(self, doc_id):
         """Re-trigger the welfare check once, after the sensor has had time to warm up.
@@ -507,14 +513,31 @@ class FirestoreDispatcher(Node):
     # Finalization
     # ------------------------------------------------------------------
 
-    def _finalize_alert(self, doc_id, status):
+    def _finalize_alert(self, doc_id, status, extra=None):
         """Write the final status to Firestore and release the robot.
+
+        ``extra`` carries any additional fields to write alongside the status -
+        currently the per-sensor welfare readings, which are only available on
+        the paths that actually ran a check.
+
+        ``welfareCheckedAt`` is written on every finalisation, including the
+        failure paths, so it marks when the robot stopped working the alert
+        rather than when a sensor check succeeded.
+
+        Only fields this node owns are written. ``acknowledgedAt`` /
+        ``acknowledgedBy`` belong to the caregiver app and must not be touched
+        here, just as the app must not write ``status``: it is the 'pending'
+        value in that field that makes an alert visible to this dispatcher.
 
         The robot is freed in the finally block regardless of whether the
         Firestore write succeeded, so a cloud outage cannot wedge the dispatcher.
         """
+        payload = {'status': status, 'welfareCheckedAt': firestore.SERVER_TIMESTAMP}
+        if extra:
+            payload.update(extra)
+
         try:
-            self._db.collection('fall_alerts').document(doc_id).update({'status': status})
+            self._db.collection('fall_alerts').document(doc_id).update(payload)
             self.get_logger().info(f'Alert {doc_id} marked as "{status}" in Firestore')
         except Exception as e:
             self.get_logger().error(f'Failed to update alert {doc_id}: {e}')
