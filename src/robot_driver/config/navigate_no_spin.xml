@@ -17,7 +17,10 @@
         <ReactiveFallback name="RecoveryFallback">
           <GoalUpdated/>
           <RoundRobin name="RecoveryActions">
-            <BackUp backup_dist="0.15" backup_speed="0.10"/>
+            <Sequence>
+              <BackUp backup_dist="0.15" backup_speed="0.10"/>
+              <ClearEntireCostmap service_name="/local_costmap/clear_entirely_local_costmap"/>
+            </Sequence>
             <Wait wait_duration="2.0"/>
           </RoundRobin>
         </ReactiveFallback>
