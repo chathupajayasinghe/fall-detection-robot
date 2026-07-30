@@ -54,8 +54,8 @@ local_costmap:
       global_frame: odom
       robot_base_frame: base_link
       rolling_window: true
-      width: 3
-      height: 3
+      width: 5
+      height: 5
       resolution: 0.05
       # 22cm x 22cm tank chassis footprint
       footprint: "[[0.11, 0.11], [0.11, -0.11], [-0.11, -0.11], [-0.11, 0.11]]"
