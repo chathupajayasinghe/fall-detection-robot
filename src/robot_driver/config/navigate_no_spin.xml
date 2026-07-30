@@ -17,7 +17,8 @@
         <ReactiveFallback name="RecoveryFallback">
           <GoalUpdated/>
           <RoundRobin name="RecoveryActions">
-            <Wait wait_duration="3.0"/>
+            <BackUp backup_dist="0.15" backup_speed="0.10"/>
+            <Wait wait_duration="2.0"/>
           </RoundRobin>
         </ReactiveFallback>
       </Sequence>

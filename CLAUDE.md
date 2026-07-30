@@ -151,8 +151,9 @@ converting beams to Cartesian.
 - `slam_params.yaml` — slam_toolbox (mapping mode, 0.05 m resolution, 6 m max range)
 - `amcl_params.yaml` — AMCL differential motion model + map_server
 - `nav2_params.yaml` — full Nav2 stack tuning
-- `navigate_no_spin.xml` — custom behaviour tree with the Spin/BackUp recovery nodes removed;
-  they caused a collision/replan loop on this chassis
+- `navigate_no_spin.xml` — custom behaviour tree with the Spin recovery node removed; it caused
+  a collision/replan loop on this chassis. BackUp recovery is re-added (0.15 m straight-line
+  reverse at 0.10 m/s), which does not reproduce that loop
 
 ### SLAM Map Workflow
 
