@@ -44,9 +44,8 @@ controller_server:
       rotate_to_heading_min_angle: 1.0
       max_angular_accel: 1.5
       transform_tolerance: 0.1
-      use_collision_detection: false
-      # Inactive — use_collision_detection is false
-      max_allowed_time_to_collision_up_to_carrot: 0.15
+      use_collision_detection: true
+      max_allowed_time_to_collision_up_to_carrot: 0.5
 
 local_costmap:
   local_costmap:
