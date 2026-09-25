@@ -1,10 +1,10 @@
-PROJECT STATE — Assistive Fall-Detection Mobile Robot Student: Jayasinghe W.G.C.S.N. (ET/2020/045) · Supervisor: Dr. Laalitha Liyanage Capstone: ETEC 43018, University of Kelaniya · Last updated: 2026-09-24 (update after every major session)
+PROJECT STATE — Assistive Fall-Detection Mobile Robot Student: Jayasinghe W.G.C.S.N. (ET/2020/045) · Supervisor: Dr. Laalitha Liyanage Capstone: ETEC 43018, University of Kelaniya · Last updated: 2026-09-25 (update after every major session)
 
 SYSTEM OVERVIEW — 4 SUBSYSTEMS
 Wearable: ESP32 + MPU6500, Edge Impulse ML fall model + 4-phase state machine (pre-fall, free-fall, impact, post-fall inactivity) — ✅ DONE
 Caregiver app: Flutter, on Pixel 7 — ✅ DONE
 Backend: Firebase/Firestore, project fall-detector-app-3319d. ESP32 posts fall alerts via REST; app receives in <3–5 s (measured) — ✅ DONE
-ROS2 robot (navigation + person localization + welfare check) — 🔨 IN PROGRESS — navigation working, welfare sensors validated, integration pending
+ROS2 robot (navigation + person localization + welfare check) — 🔨 IN PROGRESS — navigation working in the faculty room on faculty_map_v2, person finder working in the empty faculty room (3/3 clean), welfare sensors validated, end-to-end integration pending (see SESSION 2026-09-25)
 
 Response pipeline: wearable fall → Firestore → robot dispatcher → Nav2 navigates to scene → LIDAR differencing locates person → approach → PIR/RCWL welfare check → result to Firestore/app.
 
@@ -149,8 +149,9 @@ Monitors navigation progress; succeeds only on STATUS_SUCCEEDED; counts failures
 Integration: after arrival, triggers LIDAR differencing → approach 0.8 m short of the person → welfare check → reports result to Firestore
 
 SCAN_POINT = {x: 1.5, y: 0.0} (firestore_dispatcher.py line 51) — a surveyed home-map coordinate that reached 10/10 in the straight-path navigation campaign.
+⚠️ STILL THE HOME-MAP VALUE as of 2026-09-25. The faculty-room scan point on faculty_map_v2 is VALIDATED at (2.31, −0.01) — several SUCCEEDED runs from the taped origin, stopping ~11–12 cm short, inside the 0.15 m goal tolerance. firestore_dispatcher.py must be changed to {x: 2.31, y: -0.01} before the end-to-end drill.
 ⚠️ Environment-specific. These coordinates are only meaningful against the map they were surveyed on. Running against any other map — including the faculty demo room — sends the robot to an arbitrary point and the person search then runs from the wrong place. MUST be re-surveyed before any faculty-room demo.
-⚠️ Coupled to lidar_differencing: the reference scan is compared to the live scan beam-by-beam BY INDEX, so it MUST be captured from this same pose. Re-surveying SCAN_POINT means re-capturing the reference scan.
+⚠️ Coupled to lidar_differencing: the reference scan is compared to the live scan by beam index, so it MUST be captured from this same pose. Re-surveying SCAN_POINT means re-capturing the reference scan. Since b86757c (2026-09-25) each live beam is compared against the MINIMUM of the reference within ±3° (REFERENCE_WINDOW_DEG = 3.0), which absorbs small arrival-heading differences — see SESSION 2026-09-25.
 
 For the single-room demonstration, the room field from the wearable is not used for navigation routing — all alerts navigate to SCAN_POINT regardless of the RSSI room name.
 
@@ -163,7 +164,7 @@ STRAIGHT_KP = 0.0 (straight-line PID disabled after a sign-flip bug pivoted the 
 Encoder warm-up / measurement artifact: encoders sometimes under-count on the FIRST drive after a power cycle. Two consecutive measured metres confirmed ~1360 ticks/m consistently. The alarming "3× error" was NOT real — it was a measurement artifact from comparing cumulative running totals against single-drive deltas. RULE: always measure with two consecutive deltas, never cumulative totals. This is what wheel_radius=0.027 rests on; an earlier Nav2-goal-based measurement suggested 0.055 and was wrong (contaminated by path curvature, goal tolerance and recovery behaviours).
 Battery rule: <7.2 V = end of session. At ~7.1 V Nav2-speed motion becomes unreliable (creep → progress-checker 106 aborts) even when teleop still works. At 6.4 V the Pi browns out. Both "mystery" late-session failure cascades were battery. Consider a low-voltage buzzer on the balance connector.
 Yaw goal tolerance = 3.14 (was 0.25): tank tracks cannot do precise slow pivots near obstacles — robot reaches positions but failed final-heading spins (repeated error 106). Now any arrival heading counts. Consequence: arrival heading is arbitrary — lidar_differencing must NOT assume person is in front (C1 sees 360°). CONFIRMED at 3.14 — an experiment at 0.5 did NOT help (the 106 aborts came back) and was reverted 2026-07-28. Do not retry tightening this; the chassis is the limit, not the tuning.
-movement_time_allowance = 15.0 (was 10.0). rotate_to_heading_angular_vel=1.0, use_rotate_to_heading=true (already good).
+movement_time_allowance = 15.0 (was 10.0). rotate_to_heading_angular_vel=1.0. use_rotate_to_heading was actually FALSE in nav2_params.yaml (this line previously said "true (already good)" — that was wrong). With it false, a goal BEHIND the robot made RPP drive straight forward into the chair legs → error 208. Set to true in 5b035e7 (2026-09-25). ⚠️ So far tested only as a live parameter change; after the next FRESH Nav2 restart confirm with: ros2 param get /controller_server FollowPath.use_rotate_to_heading → True.
 2D LIDAR blind spots (document in thesis, manage in demos): floor-level obstacles (wires!), thin chair/desk legs, and transparent glass (bottle incident). Demo rule: clear floor.
 Map–reality match is the #1 localization factor. Door state and furniture positions at map time must match run time. Door closed always. Robot once escaped through an open door while AMCL believed it was in-room (goal "SUCCEEDED" while physically in the living room).
 AMCL procedures: startup = place robot at taped origin spot + publish /initialpose (0,0,0). Lost = ros2 service call /reinitialize_global_localization std_srvs/srv/Empty + slow driving (arcs, near distinctive features) until /amcl_pose covariance x,y < ~0.05–0.08. Verify with covariance numbers, not RViz. AMCL needs /scan before it publishes map→odom; /amcl_pose only publishes on motion updates (silence ≠ broken — check tf2_echo map odom).
@@ -196,20 +197,36 @@ ros2 launch robot_driver robot_bringup.launch.py (add start_slam_toolbox:=true o
 Verify: ros2 topic hz /scan ≈ 10 Hz (if silent: unplug/replug C1 USB, check ls -l /dev/rplidar, relaunch)
 ros2 launch robot_driver nav2_navigation.launch.py map:=$HOME/maps/<map>.yaml → wait for "Managed nodes are active"
 Publish /initialpose → drive/verify covariance → work
+Person finder: lidar_differencing is NOT started by robot_bringup.launch.py — run it by hand in its own terminal: ros2 run robot_driver lidar_differencing (decision pending on adding it to bringup)
 
 Key files: src/robot_driver/robot_driver/motor_controller.py (motors+odometry+cmd_vel watchdog) · welfare_sensor.py (PIR+RCWL, /welfare_check → /welfare_result) · lidar_differencing.py (person finder: empty-room reference vs live scan → /person_location, triggered by /find_person) · firestore_dispatcher.py (Firestore alert → nav goal; SCAN_POINT) · launch/robot_bringup.launch.py · launch/nav2_navigation.launch.py · config/nav2_params.yaml
 
 MAPS & WAYPOINTS
 
-Home-room map: ~/maps/home_map_c1 (development only) Faculty room (DEMO room, 5.8 × 7.9 m): map at ~/maps/faculty_map.yaml (saved 2026-07-09). Must be committed to repo (maps/ folder) — may still exist only on the SD card. Faculty-room waypoints (from /amcl_pose; recorded in chat, STILL NOT COMMITTED and STILL NOT VALIDATED — first task):
+Home-room map: ~/maps/home_map_c1 (development only).
+Faculty room (DEMO room, 5.8 × 7.9 m): CURRENT MAP = faculty_map_v2 (remapped 2026-09-25). On the Pi at ~/maps/faculty_map_v2.yaml/.pgm; committed to the repo as maps/faculty_map_v2.* in 9bbc128. 161 × 123 cells @ 0.05 m, origin [-0.716, -3.837, 0], yaml image path is relative (faculty_map_v2.pgm). Launch: ros2 launch robot_driver nav2_navigation.launch.py map:=$HOME/maps/faculty_map_v2.yaml
+The old ~/maps/faculty_map.yaml (2026-07-09) is SUPERSEDED — do not use it. It was never committed.
+Initial pose: taped origin (0, 0), facing +x.
 
-home/origin: (−0.13, 0.06)
-room_center: (2.31, −0.01) ← likely LIDAR-differencing scan point
-ceiling_fan: (1.56, −1.07)
-far_left_corner: (6.91, 1.56) — corners were problematic; re-validate
-far_right_corner: (7.00, −2.63) — re-validate Orientation for all: z=0, w=1 (heading irrelevant with π yaw tolerance)
+Room layout (faculty_map_v2): right half of the room has rows of table/chair legs; left and centre are open. The top wall is too close on the left side. Planned fall zone: ~1.5 m to the robot's right of the scan point, around (2.3, −1.5).
 
-⚠️ None of these are yet loaded into firestore_dispatcher.py — it currently drives to the home-map SCAN_POINT {1.5, 0.0}. Re-surveying for the faculty room means updating SCAN_POINT AND re-capturing the lidar_differencing reference scan from the new pose.
+Faculty-room waypoints on faculty_map_v2:
+scan point: (2.31, −0.01) — ✅ VALIDATED 2026-09-25 (several SUCCEEDED runs from origin; arrives ~11–12 cm short). NOT yet in firestore_dispatcher.py.
+The other waypoints recorded 2026-07-09 (ceiling_fan (1.56, −1.07), far_left_corner (6.91, 1.56), far_right_corner (7.00, −2.63)) were measured on the OLD faculty_map and are NOT valid on v2 — re-survey if needed.
+
+SESSION 2026-09-25 — FACULTY ROOM INTEGRATION (robot)
+Map: room remapped → faculty_map_v2 (see MAPS & WAYPOINTS). Committed 9bbc128.
+Navigation: scan point (2.31, −0.01) validated, several SUCCEEDED runs origin ↔ scan point, stopping ~11–12 cm short.
+Bug fixed: use_rotate_to_heading was false → a goal behind the robot made RPP drive straight forward into chair legs (error 208). Fixed in 5b035e7 (see hard-won facts; still to confirm after a fresh Nav2 restart).
+lidar_differencing is NOT in the bringup launch — it must be started by hand (ros2 run robot_driver lidar_differencing). /save_reference_scan and /find_person have no subscriber otherwise. Decision pending on adding it to robot_bringup.launch.py.
+Reference scan: re-captured at the scan point with the room clear. 360 beams (1 beam = 1°), ~/maps/reference_scan.npy on the Pi, saved 12:57. Capture pose from a fresh AMCL update (ros2 service call /request_nomotion_update std_srvs/srv/Empty, then /amcl_pose; tf2_echo map base_link agreed): (2.197, 0.006), heading −10.8°. The old home-map reference (26 Jul) is kept on the Pi as ~/maps/reference_scan_home_20260726.npy. Lesson: ros2 topic echo --once /amcl_pose returns the LAST published pose, which can be minutes old if the robot has not moved — check header.stamp, or force a nomotion update first.
+⚠️ Door ghost (empty room, before the fix): the door recess showed up as a false "person" (cluster 11–12 beams) because the arrival heading differs from the reference heading and the reference is compared by beam index. One recorded case: arrival heading +8.2° at (2.22, −0.11) vs reference −10.8° — a ~19° difference — gave a false cluster of 11 at base_link (−1.44, −2.94).
+Fix: b86757c — each live beam is compared against the minimum of the reference within ±3° (REFERENCE_WINDOW_DEG = 3.0). Empty-room test after the fix: 3/3 clean (no false person).
+⚠️ Open risk: ±3° is smaller than the ~19° heading difference seen in the case above. Record the arrival heading of every /find_person run; if a false person appears again, compare the arrival heading with −10.8° first.
+Box test (fallen-person box, BEFORE the b86757c fix): wide face toward the robot → detected at base_link (0.34, −1.66), cluster 12. Narrow 20 cm face toward the robot → MISSED: ~7 beams, below MIN_CLUSTER_POINTS = 8, and span below MIN_PERSON_SIZE = 0.3 m. Size limits not changed yet — a proposal must accept the box's narrow face but reject examiners' legs (10–15 cm). Box test to be repeated after the fix.
+⚠️ OPEN — navigation failure: the last return trip scan point → origin failed with repeated "collision ahead" and error 106, although earlier runs on the same route succeeded. Cause NOT found. The battery was low after ~3 h of running and was put on charge. Per the battery rule (<7.2 V = stop) and the 106 notes above, re-test on a full battery before looking for another cause; check localization covariance too.
+Wearable: final demo rig 29/30 (96.7%) with the original model (see §1.6a). Pole pickup false alarm (0.9961) → press cancel during the demo.
+Remaining work, in order: (1) repeat the box test after b86757c, several orientations including the 20 cm narrow face; (2) review cluster size / target selection in lidar_differencing.py and approve new size limits; (3) set SCAN_POINT in firestore_dispatcher.py to (2.31, −0.01); (4) decide whether lidar_differencing goes into the bringup launch; (5) re-test the return trip on a full battery; confirm use_rotate_to_heading after a fresh Nav2 restart; (6) end-to-end drill: wearable fall → dispatcher → robot → welfare check → app. Flash the wearable demo firmware from main with DATA_COLLECTION_MODE false (Huge APP partition).
 
 CAPABILITIES DEMONSTRATED (qualitative — for thesis narrative context)
 
@@ -229,6 +246,7 @@ Mobile phone with caregiver app
 Demo Steps:
 
 Show OLED displaying "TRACKING" (FSR pressed, device armed)
+⚠️ Known false alarm: PICKING UP THE POLE scores 0.9961. If it happens while setting up, press the CANCEL button within the 10 s countdown.
 Release pole — wearable falls freely onto mattress
 Panel observes real-time UDP logs: Freefall → Impact → ML Inference (confidence ≥0.85) → Stillness → Pre-Alert countdown
 OLED shows 10-second countdown with buzzer + blue LED
