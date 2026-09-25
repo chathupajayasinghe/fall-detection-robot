@@ -37,9 +37,10 @@ controller_server:
       max_lookahead_dist: 1.2
       use_velocity_scaled_lookahead_dist: false
       min_approach_linear_velocity: 0.05
-      use_rotate_to_heading: false
-      # Inactive — use_rotate_to_heading is false; re-enable to restore in-place
-      # path-direction pivoting (these three only apply during that rotation)
+      # Must stay true: with it off and allow_reversing false (default), a goal
+      # behind the robot makes RPP drive straight forward the wrong way
+      # (drove 1.5 m into chair legs, failed with 208). Pivots in place first.
+      use_rotate_to_heading: true
       rotate_to_heading_angular_vel: 1.0
       rotate_to_heading_min_angle: 1.0
       max_angular_accel: 1.5
