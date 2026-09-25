@@ -37,18 +37,21 @@ from tf2_geometry_msgs import do_transform_point
 # ENVIRONMENT-SPECIFIC - MUST BE RE-SURVEYED FOR THE FACULTY DEMO ROOM
 #
 # Map-frame coordinates the robot drives to before it starts looking for the
-# person. Surveyed against the home map: reached 10/10 in the straight-path
-# navigation campaign.
+# person. Surveyed against the faculty demo-room map, maps/faculty_map_v2
+# (2026-09-25): several SUCCEEDED runs from the taped origin (0, 0), arriving
+# ~11-12 cm short, inside the 0.15 m goal tolerance. Replaces the home-map
+# value {1.5, 0.0}.
 #
 # These coordinates are only meaningful against the map they were surveyed in.
-# Running against a different map - including the faculty demo room - sends the
-# robot to an arbitrary point and the person search then runs from the wrong
-# place. Re-survey before any demo on an unfamiliar map.
+# Running against a different map sends the robot to an arbitrary point and the
+# person search then runs from the wrong place. Re-survey after any remap.
 #
-# See also: the reference scan used by lidar_differencing is compared beam-by-
-# beam by index, so it must be captured from this same pose to be meaningful.
+# See also: lidar_differencing compares the live scan with a reference scan
+# captured at this point (by beam index, with a +/-3 deg window), so it must be
+# re-captured whenever this point changes. Start every mission from the taped
+# origin so the robot arrives with about the reference heading.
 # ############################################################################
-SCAN_POINT = {'x': 1.5, 'y': 0.0}
+SCAN_POINT = {'x': 2.31, 'y': -0.01}
 
 APPROACH_DISTANCE = 0.8  # meters to stop short of the detected person
 PERSON_LOCATION_TIMEOUT = 15.0  # seconds to wait for /person_location after /find_person
