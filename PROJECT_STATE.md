@@ -148,8 +148,8 @@ Sends the goal via an rclpy ActionClient on the navigate_to_pose action — NOT 
 Monitors navigation progress; succeeds only on STATUS_SUCCEEDED; counts failures per alert and gives up after 3 (MAX_NAV_FAILURES), writing navigation_failed
 Integration: after arrival, triggers LIDAR differencing → approach 0.8 m short of the person → welfare check → reports result to Firestore
 
-SCAN_POINT = {x: 1.5, y: 0.0} (firestore_dispatcher.py line 51) — a surveyed home-map coordinate that reached 10/10 in the straight-path navigation campaign.
-⚠️ STILL THE HOME-MAP VALUE as of 2026-09-25. The faculty-room scan point on faculty_map_v2 is VALIDATED at (2.31, −0.01) — several SUCCEEDED runs from the taped origin, stopping ~11–12 cm short, inside the 0.15 m goal tolerance. firestore_dispatcher.py must be changed to {x: 2.31, y: -0.01} before the end-to-end drill.
+SCAN_POINT = {x: 2.31, y: -0.01} (firestore_dispatcher.py line 54) — surveyed on the faculty demo-room map faculty_map_v2, set 2026-09-25 in dcd6190: several SUCCEEDED runs from the taped origin, arriving ~11–12 cm short, inside the 0.15 m goal tolerance.
+Replaces the home-map value {x: 1.5, y: 0.0}, which reached 10/10 in the home-room straight-path campaign and is NOT valid on faculty_map_v2.
 ⚠️ Environment-specific. These coordinates are only meaningful against the map they were surveyed on. Running against any other map — including the faculty demo room — sends the robot to an arbitrary point and the person search then runs from the wrong place. MUST be re-surveyed before any faculty-room demo.
 ⚠️ Coupled to lidar_differencing: the reference scan is compared to the live scan by beam index, so it MUST be captured from this same pose. Re-surveying SCAN_POINT means re-capturing the reference scan. Since b86757c (2026-09-25) each live beam is compared against the MINIMUM of the reference within ±3° (REFERENCE_WINDOW_DEG = 3.0), which absorbs small arrival-heading differences — see SESSION 2026-09-25.
 
@@ -211,7 +211,7 @@ Initial pose: taped origin (0, 0), facing +x.
 Room layout (faculty_map_v2): right half of the room has rows of table/chair legs; left and centre are open. The top wall is too close on the left side. Planned fall zone: ~1.5 m to the robot's right of the scan point, around (2.3, −1.5).
 
 Faculty-room waypoints on faculty_map_v2:
-scan point: (2.31, −0.01) — ✅ VALIDATED 2026-09-25 (several SUCCEEDED runs from origin; arrives ~11–12 cm short). NOT yet in firestore_dispatcher.py.
+scan point: (2.31, −0.01) — ✅ VALIDATED 2026-09-25 (several SUCCEEDED runs from origin; arrives ~11–12 cm short). Set in firestore_dispatcher.py (dcd6190).
 The other waypoints recorded 2026-07-09 (ceiling_fan (1.56, −1.07), far_left_corner (6.91, 1.56), far_right_corner (7.00, −2.63)) were measured on the OLD faculty_map and are NOT valid on v2 — re-survey if needed.
 
 SESSION 2026-09-25 — FACULTY ROOM INTEGRATION (robot)
@@ -227,7 +227,7 @@ Keep recording the arrival heading of every /find_person run, but treat it as AM
 Box test (fallen-person box, BEFORE the b86757c fix): wide face toward the robot → detected at base_link (0.34, −1.66), cluster 12. Narrow 20 cm face toward the robot → MISSED: ~7 beams, below MIN_CLUSTER_POINTS = 8, and span below MIN_PERSON_SIZE = 0.3 m. Size limits not changed yet — a proposal must accept the box's narrow face but reject examiners' legs (10–15 cm). Box test to be repeated after the fix.
 ⚠️ OPEN — navigation failure: the last return trip scan point → origin failed with repeated "collision ahead" and error 106, although earlier runs on the same route succeeded. Cause NOT found. The battery was low after ~3 h of running and was put on charge. Per the battery rule (<7.2 V = stop) and the 106 notes above, re-test on a full battery before looking for another cause; check localization covariance too.
 Wearable: final demo rig 29/30 (96.7%) with the original model (see §1.6a). Pole pickup false alarm (0.9961) → press cancel during the demo.
-Remaining work, in order: (0) round-trip test: several origin → scan point arrivals, each followed by an empty-room /find_person, all clean; (1) repeat the box test after b86757c, several orientations including the 20 cm narrow face; (2) review cluster size / target selection in lidar_differencing.py and approve new size limits; (3) set SCAN_POINT in firestore_dispatcher.py to (2.31, −0.01); (4) decide whether lidar_differencing goes into the bringup launch; (5) re-test the return trip on a full battery; confirm use_rotate_to_heading after a fresh Nav2 restart; (6) end-to-end drill: wearable fall → dispatcher → robot → welfare check → app. Flash the wearable demo firmware from main with DATA_COLLECTION_MODE false (Huge APP partition).
+Remaining work, in order: (0) round-trip test: several origin → scan point arrivals, each followed by an empty-room /find_person, all clean; (1) repeat the box test after b86757c, several orientations including the 20 cm narrow face; (2) review cluster size / target selection in lidar_differencing.py and approve new size limits; (3) ✅ DONE dcd6190 — SCAN_POINT set to (2.31, −0.01); (4) decide whether lidar_differencing goes into the bringup launch; (5) re-test the return trip on a full battery; confirm use_rotate_to_heading after a fresh Nav2 restart; (6) end-to-end drill: wearable fall → dispatcher → robot → welfare check → app. Flash the wearable demo firmware from main with DATA_COLLECTION_MODE false (Huge APP partition).
 
 CAPABILITIES DEMONSTRATED (qualitative — for thesis narrative context)
 
