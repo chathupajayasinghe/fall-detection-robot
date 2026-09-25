@@ -383,7 +383,7 @@ class FirestoreDispatcher(Node):
         """
         try:
             transform = self.tf_buffer.lookup_transform(
-                'map', person_point.header.frame_id, person_point.header.stamp,
+                'map', person_point.header.frame_id, rclpy.time.Time(),
                 timeout=rclpy.duration.Duration(seconds=TF_LOOKUP_TIMEOUT))
         except tf2_ros.TransformException as e:
             self.get_logger().error(f'TF lookup map<-{person_point.header.frame_id} failed: {e}')
