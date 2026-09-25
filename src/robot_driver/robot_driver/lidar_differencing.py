@@ -22,6 +22,10 @@ from geometry_msgs.msg import PointStamped
 
 REFERENCE_SCAN_PATH = os.path.expanduser('~/maps/reference_scan.npy')
 DIFF_THRESHOLD = 0.3  # meters closer than reference to count as a new obstacle
+# Half-width of the reference window each live beam is compared against. Absorbs
+# the 1-2 deg heading error between reference capture and arrival, which otherwise
+# flips beams at the door recess edges between door and wall.
+REFERENCE_WINDOW_DEG = 3.0
 
 MIN_CLUSTER_POINTS = 8  # fewer beams than this is noise; span filter still rejects small objects
 MIN_PERSON_SIZE = 0.3  # meters, smallest plausible physical span of a person-sized cluster
@@ -111,7 +115,8 @@ class LidarDifferencing(Node):
         if not self._beam_counts_match(live_ranges, reference_ranges):
             return
 
-        is_new_obstacle = self._compute_new_obstacle_mask(live_ranges, reference_ranges)
+        is_new_obstacle = self._compute_new_obstacle_mask(
+            live_ranges, reference_ranges, scan.angle_increment)
 
         cluster = self._select_person_cluster(is_new_obstacle, live_ranges, scan)
         if cluster is None:
@@ -154,8 +159,15 @@ class LidarDifferencing(Node):
             return False
         return True
 
-    def _compute_new_obstacle_mask(self, live_ranges, reference_ranges):
-        """Per-beam mask of returns that are DIFF_THRESHOLD closer than the reference.
+    def _compute_new_obstacle_mask(self, live_ranges, reference_ranges, angle_increment):
+        """Per-beam mask of returns DIFF_THRESHOLD closer than the nearby reference.
+
+        Each live beam is compared against the *minimum* reference range within
+        +/-REFERENCE_WINDOW_DEG of it, not just the same-index beam. A small
+        heading error between reference and arrival shifts depth discontinuities
+        (door recesses, furniture edges) by a beam or two; the windowed minimum
+        absorbs that, while a genuinely new object on open floor is still closer
+        than every reference beam around it.
 
         Only beams with a finite, positive range in *both* scans are considered;
         infinities and zeros mean 'no return' and carry no information. The
@@ -163,15 +175,21 @@ class LidarDifferencing(Node):
         the reference means something was removed, not that a person arrived.
         """
         n = len(live_ranges)
-        valid = (
-            np.isfinite(live_ranges) & np.isfinite(reference_ranges)
-            & (live_ranges > 0.0) & (reference_ranges > 0.0)
-        )
+        reference_valid = np.isfinite(reference_ranges) & (reference_ranges > 0.0)
+        valid = np.isfinite(live_ranges) & (live_ranges > 0.0) & reference_valid
+
+        # No-return reference beams must not win the minimum, so treat them as infinitely far.
+        reference_for_min = np.where(reference_valid, reference_ranges, np.inf)
+        half_width = int(round(math.radians(REFERENCE_WINDOW_DEG) / abs(angle_increment)))
+        window_min = reference_for_min.copy()
+        for shift in range(1, half_width + 1):
+            # np.roll wraps around, matching the full 360 deg sweep
+            # (see _merge_wraparound_cluster).
+            window_min = np.minimum(window_min, np.roll(reference_for_min, shift))
+            window_min = np.minimum(window_min, np.roll(reference_for_min, -shift))
 
         is_new_obstacle = np.zeros(n, dtype=bool)
-        is_new_obstacle[valid] = (
-            reference_ranges[valid] - live_ranges[valid]
-        ) > DIFF_THRESHOLD
+        is_new_obstacle[valid] = (window_min[valid] - live_ranges[valid]) > DIFF_THRESHOLD
         return is_new_obstacle
 
     def _publish_person_location(self, x, y):
