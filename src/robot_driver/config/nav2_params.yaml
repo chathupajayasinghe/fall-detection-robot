@@ -46,7 +46,7 @@ controller_server:
       max_angular_accel: 1.5
       transform_tolerance: 0.1
       use_collision_detection: true
-      max_allowed_time_to_collision_up_to_carrot: 0.25
+      max_allowed_time_to_collision_up_to_carrot: 1.0
 
 local_costmap:
   local_costmap:
@@ -79,8 +79,8 @@ local_costmap:
           obstacle_min_range: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.30
+        cost_scaling_factor: 2.0
+        inflation_radius: 0.40
       always_send_full_costmap: true
 
 global_costmap:
@@ -115,8 +115,8 @@ global_costmap:
           obstacle_min_range: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.30
+        cost_scaling_factor: 2.0
+        inflation_radius: 0.40
       always_send_full_costmap: true
 
 map_server:
