@@ -12,6 +12,7 @@ Workflow:
 """
 import os
 import math
+import warnings
 
 import numpy as np
 import rclpy
@@ -27,8 +28,11 @@ DIFF_THRESHOLD = 0.3  # meters closer than reference to count as a new obstacle
 # flips beams at the door recess edges between door and wall.
 REFERENCE_WINDOW_DEG = 3.0
 
-MIN_CLUSTER_POINTS = 8  # fewer beams than this is noise; span filter still rejects small objects
-MIN_PERSON_SIZE = 0.3  # meters, smallest plausible physical span of a person-sized cluster
+LIVE_SCAN_COUNT = 5  # scans median-filtered per /find_person, to suppress single-scan dropouts
+REFERENCE_SCAN_COUNT = 10  # scans median-filtered into the saved empty-room reference
+
+MIN_CLUSTER_POINTS = 5  # fewer beams than this is noise; span filter still rejects small objects
+MIN_PERSON_SIZE = 0.2  # meters, smallest plausible physical span of a person-sized cluster
 MAX_PERSON_SIZE = 2.0  # meters, largest plausible physical span of a person-sized cluster
 
 
@@ -50,6 +54,9 @@ class LidarDifferencing(Node):
         """Initialise the reference and live scan buffers to 'nothing yet'."""
         self.reference_ranges = None
         self.latest_scan = None
+        # Multi-scan captures: None when idle, else the scans gathered so far.
+        self._live_scans = None
+        self._reference_scans = None
 
     def _setup_interfaces(self):
         """Create the scan/trigger subscriptions and the person location publisher."""
@@ -83,33 +90,87 @@ class LidarDifferencing(Node):
                 'Publish to /save_reference_scan once the room is empty.')
 
     def _scan_callback(self, msg: LaserScan):
-        """Buffer the most recent scan; differencing happens on demand, not per scan."""
+        """Buffer the most recent scan and feed any multi-scan capture in progress.
+
+        Differencing happens on demand, once a capture has collected its scans,
+        not per scan.
+        """
         self.latest_scan = msg
 
+        if self._reference_scans is not None:
+            self._reference_scans.append(msg)
+            if len(self._reference_scans) >= REFERENCE_SCAN_COUNT:
+                scans, self._reference_scans = self._reference_scans, None
+                self._save_reference(scans)
+
+        if self._live_scans is not None:
+            self._live_scans.append(msg)
+            if len(self._live_scans) >= LIVE_SCAN_COUNT:
+                scans, self._live_scans = self._live_scans, None
+                self._find_person(scans)
+
     def _save_reference_callback(self, _msg: Empty):
-        """Snapshot the current scan as the empty-room reference, on disk and in memory."""
+        """Start capturing REFERENCE_SCAN_COUNT scans for the empty-room reference."""
         if self.latest_scan is None:
             self.get_logger().warn('No scan received yet, cannot save reference.')
             return
+        if self._reference_scans is not None:
+            self.get_logger().warn('Reference capture already in progress; ignoring request.')
+            return
 
-        ranges = np.array(self.latest_scan.ranges, dtype=np.float64)
+        self._reference_scans = []
+        self.get_logger().info(f'Capturing {REFERENCE_SCAN_COUNT} scans for the reference')
+
+    def _save_reference(self, scans):
+        """Save the per-beam median of the scans as the reference, on disk and in memory."""
+        ranges = self._median_ranges(scans)
         os.makedirs(os.path.dirname(REFERENCE_SCAN_PATH), exist_ok=True)
         np.save(REFERENCE_SCAN_PATH, ranges)
         self.reference_ranges = ranges
         self.get_logger().info(
-            f'Saved reference scan ({len(ranges)} beams) to {REFERENCE_SCAN_PATH}')
+            f'Saved reference scan ({len(ranges)} beams, median of {len(scans)} scans) '
+            f'to {REFERENCE_SCAN_PATH}')
+
+    def _median_ranges(self, scans):
+        """Per-beam median range across scans, ignoring no-return (inf/0) readings.
+
+        A beam with no valid reading in any scan comes out as inf, the same
+        'no return' value a single scan would carry. Scans whose beam count
+        differs from the last one are left out, since their beams do not line up.
+        """
+        n = len(scans[-1].ranges)
+        matching = [s for s in scans if len(s.ranges) == n]
+        if len(matching) < len(scans):
+            self.get_logger().warn(
+                f'Left {len(scans) - len(matching)} of {len(scans)} scans out of the median '
+                f'(beam count other than {n}).')
+
+        stacked = np.array([s.ranges for s in matching], dtype=np.float64)
+        stacked[~np.isfinite(stacked) | (stacked <= 0.0)] = np.nan
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)  # beams with no valid reading
+            median = np.nanmedian(stacked, axis=0)
+        median[np.isnan(median)] = np.inf
+        return median
 
     # ------------------------------------------------------------------
     # Person search
     # ------------------------------------------------------------------
 
     def _find_person_callback(self, _msg: Empty):
-        """Diff the live scan against the reference and publish the best person candidate."""
+        """Start capturing LIVE_SCAN_COUNT scans for a person search."""
         if not self._detection_inputs_ready():
             return
+        if self._live_scans is not None:
+            self.get_logger().info('Person search already in progress; ignoring request.')
+            return
 
-        scan = self.latest_scan
-        live_ranges = np.array(scan.ranges, dtype=np.float64)
+        self._live_scans = []
+
+    def _find_person(self, scans):
+        """Diff the median live scan against the reference and publish the best candidate."""
+        scan = scans[-1]  # angle_min / angle_increment are the same for every scan
+        live_ranges = self._median_ranges(scans)
         reference_ranges = self.reference_ranges
 
         if not self._beam_counts_match(live_ranges, reference_ranges):
@@ -120,7 +181,7 @@ class LidarDifferencing(Node):
 
         cluster = self._select_person_cluster(is_new_obstacle, live_ranges, scan)
         if cluster is None:
-            self.get_logger().info('No new obstacle found in live scan.')
+            self.get_logger().info('No person-sized cluster found in live scan.')
             return
 
         centroid = self._cluster_centroid(cluster, live_ranges, scan)
@@ -218,10 +279,12 @@ class LidarDifferencing(Node):
         if not clusters:
             return None
 
-        candidates = [
-            cluster for cluster in clusters
-            if self._is_person_sized(cluster, live_ranges, scan)
-        ]
+        candidates = []
+        for cluster in clusters:
+            rejection, span = self._person_size_rejection(cluster, live_ranges, scan)
+            self._log_cluster(cluster, live_ranges, scan, span, rejection)
+            if rejection is None:
+                candidates.append(cluster)
 
         if not candidates:
             return None
@@ -256,22 +319,34 @@ class LidarDifferencing(Node):
             clusters.pop()
         return clusters
 
-    def _is_person_sized(self, cluster, live_ranges, scan: LaserScan):
-        """True when a cluster is big enough to be real and small enough to be a person.
+    def _person_size_rejection(self, cluster, live_ranges, scan: LaserScan):
+        """Name of the filter rejecting a cluster (None if person-sized), and its span.
 
         Two filters, because neither alone is sufficient: the beam count rejects
         sensor noise, while the physical span rejects things that return many
         beams but are the wrong size - a chair leg up close, or a whole wall.
+        The span is measured even when the beam count rejects the cluster, so
+        every cluster can be logged in full.
         """
-        if len(cluster) < MIN_CLUSTER_POINTS:
-            return False
-
         points = self._cluster_points(cluster, live_ranges, scan)
         span = self._cluster_span(points)
-        if span is None or span < MIN_PERSON_SIZE or span > MAX_PERSON_SIZE:
-            return False
 
-        return True
+        if len(cluster) < MIN_CLUSTER_POINTS:
+            return 'MIN_CLUSTER_POINTS', span
+        if span is None or span < MIN_PERSON_SIZE:
+            return 'MIN_PERSON_SIZE', span
+        if span > MAX_PERSON_SIZE:
+            return 'MAX_PERSON_SIZE', span
+        return None, span
+
+    def _log_cluster(self, cluster, live_ranges, scan: LaserScan, span, rejection):
+        """Log one candidate cluster and its verdict, so a missed detection can be diagnosed."""
+        centroid = self._cluster_centroid(cluster, live_ranges, scan)
+        centre = f'({centroid[0]:.2f}, {centroid[1]:.2f})' if centroid else '(invalid)'
+        span_text = f'{span:.2f} m' if span is not None else 'n/a'
+        verdict = f'rejected by {rejection}' if rejection else 'accepted'
+        self.get_logger().info(
+            f'Cluster at base_link {centre}: {len(cluster)} points, span {span_text}, {verdict}')
 
     # ------------------------------------------------------------------
     # Cluster geometry

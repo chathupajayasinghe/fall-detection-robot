@@ -54,7 +54,10 @@ from tf2_geometry_msgs import do_transform_point
 SCAN_POINT = {'x': 2.31, 'y': -0.01}
 
 APPROACH_DISTANCE = 0.8  # meters to stop short of the detected person
-PERSON_LOCATION_TIMEOUT = 15.0  # seconds to wait for /person_location after /find_person
+# lidar_differencing answers a /find_person after LIVE_SCAN_COUNT scans (well under
+# a second) and publishes nothing on a miss, so a miss is only visible as silence.
+PERSON_SEARCH_ATTEMPT_TIMEOUT = 3.0  # seconds to wait for /person_location per /find_person
+PERSON_SEARCH_RETRIES = 3  # further /find_person attempts after a miss, before no_person_found
 WELFARE_RESULT_TIMEOUT = 20.0  # seconds to wait for /welfare_result after /welfare_check
 NAV_SERVER_WAIT_TIMEOUT = 5.0  # seconds to wait for the navigate_to_pose action server
 TF_LOOKUP_TIMEOUT = 1.0  # seconds to wait for a map->base_link transform
@@ -344,9 +347,14 @@ class FirestoreDispatcher(Node):
             return  # stale callback from an alert we've already dropped
 
         self.get_logger().info(f'Arrived at scan point for alert {doc_id}, searching for person')
+        active['search_retries'] = 0
+        self._start_person_search(active)
+
+    def _start_person_search(self, active):
+        """Trigger one /find_person attempt and arm its deadline."""
         self.find_person_pub.publish(Empty())
         active['stage'] = STAGE_AWAITING_PERSON
-        active['deadline'] = time.time() + PERSON_LOCATION_TIMEOUT
+        active['deadline'] = time.time() + PERSON_SEARCH_ATTEMPT_TIMEOUT
 
     def _on_person_location(self, msg: PointStamped):
         """Navigate to an approach pose once the person has been located."""
@@ -506,7 +514,16 @@ class FirestoreDispatcher(Node):
 
         doc_id = active['doc_id']
         if active['stage'] == STAGE_AWAITING_PERSON:
-            self.get_logger().warn(f'No person found within timeout for alert {doc_id}')
+            retries = active.get('search_retries', 0)
+            if retries < PERSON_SEARCH_RETRIES:
+                active['search_retries'] = retries + 1
+                self.get_logger().info(
+                    f'No person found for alert {doc_id}; retrying search '
+                    f'({retries + 1}/{PERSON_SEARCH_RETRIES})')
+                self._start_person_search(active)
+                return
+            self.get_logger().warn(
+                f'No person found after {retries + 1} searches for alert {doc_id}')
             self._finalize_alert(doc_id, 'no_person_found')
         elif active['stage'] == STAGE_AWAITING_WELFARE:
             self.get_logger().error(f'Welfare result timed out for alert {doc_id}')
