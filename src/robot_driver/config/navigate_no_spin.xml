@@ -4,8 +4,22 @@
       <PipelineSequence name="NavigateWithReplanning">
         <ControllerSelector selected_controller="{selected_controller}" default_controller="FollowPath" topic_name="controller_selector"/>
         <PlannerSelector selected_planner="{selected_planner}" default_planner="GridBased" topic_name="planner_selector"/>
+        <!-- Keep the current path until it becomes invalid, the goal changes, or it is
+             older than 20 s. Replanning every tick flipped the detour left/right around a
+             centred obstacle, and each flip pivoted the robot next to it. -->
         <RateController hz="1.0">
-          <ComputePathToPose goal="{goal}" path="{path}" planner_id="{selected_planner}" error_code_id="{compute_path_error_code}"/>
+          <Fallback>
+            <ReactiveSequence>
+              <Inverter>
+                <PathExpiringTimer seconds="20" path="{path}"/>
+              </Inverter>
+              <Inverter>
+                <GlobalUpdatedGoal/>
+              </Inverter>
+              <IsPathValid path="{path}"/>
+            </ReactiveSequence>
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="{selected_planner}" error_code_id="{compute_path_error_code}"/>
+          </Fallback>
         </RateController>
         <FollowPath path="{path}" controller_id="{selected_controller}" error_code_id="{follow_path_error_code}"/>
       </PipelineSequence>
