@@ -35,6 +35,12 @@ MIN_CLUSTER_POINTS = 5  # fewer beams than this is noise; span filter still reje
 MIN_PERSON_SIZE = 0.2  # meters, smallest plausible physical span of a person-sized cluster
 MAX_PERSON_SIZE = 2.0  # meters, largest plausible physical span of a person-sized cluster
 
+# Adjacent clusters whose facing endpoints are closer than this are one fragmented object.
+MERGE_GAP = 0.15  # meters
+# Clusters centred farther than this are ignored: the fall zone is 1.0-1.8 m from the scan
+# point, while wall and door ghosts sit at 2.4-3.2 m.
+MAX_SEARCH_RANGE = 2.2  # meters from base_link
+
 
 class LidarDifferencing(Node):
     """Detects a person as the difference between a live and a reference scan."""
@@ -275,13 +281,14 @@ class LidarDifferencing(Node):
 
         clusters = self._group_contiguous_indices(is_new_obstacle)
         clusters = self._merge_wraparound_cluster(clusters, n)
+        clusters = self._merge_nearby_clusters(clusters, live_ranges, scan)
 
         if not clusters:
             return None
 
         candidates = []
         for cluster in clusters:
-            rejection, span = self._person_size_rejection(cluster, live_ranges, scan)
+            rejection, span = self._cluster_rejection(cluster, live_ranges, scan)
             self._log_cluster(cluster, live_ranges, scan, span, rejection)
             if rejection is None:
                 candidates.append(cluster)
@@ -319,18 +326,71 @@ class LidarDifferencing(Node):
             clusters.pop()
         return clusters
 
-    def _person_size_rejection(self, cluster, live_ranges, scan: LaserScan):
-        """Name of the filter rejecting a cluster (None if person-sized), and its span.
+    def _merge_nearby_clusters(self, clusters, live_ranges, scan: LaserScan):
+        """Join angularly adjacent clusters whose facing endpoints are within MERGE_GAP.
 
-        Two filters, because neither alone is sufficient: the beam count rejects
-        sensor noise, while the physical span rejects things that return many
-        beams but are the wrong size - a chair leg up close, or a whole wall.
-        The span is measured even when the beam count rejects the cluster, so
-        every cluster can be logged in full.
+        One object can come back as several runs when a few beams across it are
+        not flagged. Rejoining them before the size filters stops a fragmented
+        box losing to a larger ghost. Clusters are in angular order, so each is
+        compared with the next, and the last with the first across the 0/360
+        seam. The unflagged gap beams are not added to the merged cluster.
+        """
+        if len(clusters) < 2:
+            return clusters
+
+        groups = [[clusters[0]]]
+        for cluster in clusters[1:]:
+            if self._endpoint_gap(groups[-1][-1], cluster, live_ranges, scan) <= MERGE_GAP:
+                groups[-1].append(cluster)
+            else:
+                groups.append([cluster])
+
+        if len(groups) > 1 and self._endpoint_gap(
+                groups[-1][-1], groups[0][0], live_ranges, scan) <= MERGE_GAP:
+            groups[0] = groups.pop() + groups[0]
+
+        merged = []
+        for group in groups:
+            if len(group) > 1:
+                self._log_merge(group, live_ranges, scan)
+            merged.append([i for cluster in group for i in cluster])
+        return merged
+
+    def _endpoint_gap(self, cluster_a, cluster_b, live_ranges, scan: LaserScan):
+        """Distance in meters from the last beam of cluster_a to the first beam of cluster_b."""
+        end = self._cluster_points([cluster_a[-1]], live_ranges, scan)
+        start = self._cluster_points([cluster_b[0]], live_ranges, scan)
+        if not end or not start:
+            return math.inf
+        return math.hypot(start[0][0] - end[0][0], start[0][1] - end[0][1])
+
+    def _log_merge(self, group, live_ranges, scan: LaserScan):
+        """Log which clusters were joined and across what gaps."""
+        sizes = ' + '.join(str(len(cluster)) for cluster in group)
+        gaps = ', '.join(
+            f'{self._endpoint_gap(a, b, live_ranges, scan):.2f}'
+            for a, b in zip(group, group[1:]))
+        total = sum(len(cluster) for cluster in group)
+        self.get_logger().info(
+            f'Merged adjacent clusters of {sizes} points (gaps {gaps} m) '
+            f'into one of {total} points')
+
+    def _cluster_rejection(self, cluster, live_ranges, scan: LaserScan):
+        """Name of the filter rejecting a cluster (None if it passes), and its span.
+
+        The range filter drops wall and door ghosts beyond the fall zone. The two
+        size filters are both needed: the beam count rejects sensor noise, while
+        the physical span rejects things that return many beams but are the
+        wrong size - a chair leg up close, or a whole wall. The span is measured
+        even when an earlier filter rejects the cluster, so every cluster can be
+        logged in full.
         """
         points = self._cluster_points(cluster, live_ranges, scan)
         span = self._cluster_span(points)
 
+        centroid = self._cluster_centroid(cluster, live_ranges, scan)
+        if centroid is not None and math.hypot(*centroid) > MAX_SEARCH_RANGE:
+            return 'MAX_SEARCH_RANGE', span
         if len(cluster) < MIN_CLUSTER_POINTS:
             return 'MIN_CLUSTER_POINTS', span
         if span is None or span < MIN_PERSON_SIZE:
