@@ -152,7 +152,7 @@ converting beams to Cartesian.
 - `amcl_params.yaml` — AMCL differential motion model + map_server
 - `nav2_params.yaml` — full Nav2 stack tuning
 - `navigate_no_spin.xml` — custom behaviour tree with the Spin recovery node removed; it caused
-  a collision/replan loop on this chassis. BackUp recovery is re-added (0.15 m straight-line
+  a collision/replan loop on this chassis. BackUp recovery is re-added (0.30 m straight-line
   reverse at 0.10 m/s), which does not reproduce that loop. Recovery is BackUp / Wait only — do
   **not** re-add `ClearEntireCostmap`: clearing the local costmap erases the obstacle just
   detected and the robot drives into it (removed in `9d62ac0`/`e4a3e1c`, came back, removed
