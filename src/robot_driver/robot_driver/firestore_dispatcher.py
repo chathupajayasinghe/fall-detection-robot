@@ -27,7 +27,7 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped, PointStamped
-from nav2_msgs.action import NavigateToPose
+from nav2_msgs.action import NavigateToPose, Spin
 from std_msgs.msg import Empty, String
 import tf2_ros
 from tf2_geometry_msgs import do_transform_point
@@ -64,7 +64,15 @@ TF_LOOKUP_TIMEOUT = 1.0  # seconds to wait for a map->base_link transform
 WELFARE_WARMUP_RETRY_DELAY = 5.0  # seconds to wait before re-triggering /welfare_check once
 MAX_NAV_FAILURES = 3  # nav/TF failures allowed for a given alert before giving up
 
+# The PIR and RCWL sensors face forward, but yaw_goal_tolerance is 3.14, so the robot can
+# arrive at the approach pose facing away from the person. Turn toward them first.
+FACE_PERSON_THRESHOLD_DEG = 20.0  # turn only if the person is further off-heading than this
+SPIN_TIME_ALLOWANCE = 15.0  # seconds Nav2's Spin behavior may take before it gives up
+SPIN_SERVER_WAIT_TIMEOUT = 1.0  # seconds to wait for the spin action server
+SPIN_RESULT_GRACE = 5.0  # extra seconds past the allowance before giving up on a Spin result
+
 STAGE_AWAITING_PERSON = 'awaiting_person'
+STAGE_AWAITING_SPIN = 'awaiting_spin'
 STAGE_AWAITING_WELFARE = 'awaiting_welfare'
 
 VERDICT_TO_STATUS = {
@@ -97,8 +105,9 @@ class FirestoreDispatcher(Node):
     # ------------------------------------------------------------------
 
     def _setup_nav_client(self):
-        """Create the Nav2 action client used for every navigation leg."""
+        """Create the Nav2 action clients: navigation legs, and turning to face the person."""
         self._action_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+        self._spin_client = ActionClient(self, Spin, 'spin')
 
     def _setup_alert_state(self):
         """Initialise the alert queue and the single-active-alert bookkeeping.
@@ -373,7 +382,8 @@ class FirestoreDispatcher(Node):
             self._on_nav_failure(doc_id, 'tf transform to map failed')
             return
 
-        approach_x, approach_y, yaw = approach
+        approach_x, approach_y, yaw, person_x, person_y = approach
+        active['person_map'] = (person_x, person_y)  # to face the person after arrival
         self.get_logger().info(
             f'Person found for alert {doc_id}, approaching ({approach_x:.2f}, {approach_y:.2f})')
         self._navigate(
@@ -384,6 +394,8 @@ class FirestoreDispatcher(Node):
 
     def _compute_approach_pose(self, person_point: PointStamped):
         """Map-frame pose APPROACH_DISTANCE short of the person, facing them.
+
+        Returns (approach_x, approach_y, yaw, person_x, person_y), all in the map frame.
 
         Stopping short rather than driving onto the reported point keeps the
         robot from colliding with someone on the floor, and leaves the sensors
@@ -407,24 +419,150 @@ class FirestoreDispatcher(Node):
 
         if dist < 1e-3:
             # Person is essentially where the robot already is; nowhere to approach from.
-            return (robot_x, robot_y, 0.0)
+            return (robot_x, robot_y, 0.0, person_map.x, person_map.y)
 
         yaw = math.atan2(dy, dx)
         approach_x = person_map.x - (dx / dist) * APPROACH_DISTANCE
         approach_y = person_map.y - (dy / dist) * APPROACH_DISTANCE
-        return (approach_x, approach_y, yaw)
+        return (approach_x, approach_y, yaw, person_map.x, person_map.y)
 
     # ------------------------------------------------------------------
-    # Stage 2: approach -> welfare check
+    # Stage 2: approach -> face the person -> welfare check
     # ------------------------------------------------------------------
 
     def _on_approach_reached(self, doc_id):
-        """Trigger the welfare check now the robot is beside the person."""
+        """Turn to face the person if needed, then trigger the welfare check.
+
+        Facing is best effort: if the angle cannot be computed, or Spin is
+        unavailable, rejected, fails or times out, the welfare check runs
+        anyway rather than aborting the mission.
+        """
         active = self._active
         if active is None or active['doc_id'] != doc_id:
             return
 
-        self.get_logger().info(f'Arrived at approach pose for alert {doc_id}, checking welfare')
+        self.get_logger().info(f'Arrived at approach pose for alert {doc_id}')
+
+        angle = self._relative_angle_to_person(active)
+        if angle is None:
+            self.get_logger().warn(
+                f'Could not compute the angle to the person for alert {doc_id}; '
+                'running the welfare check without turning')
+            self._start_welfare_check(active)
+            return
+
+        if abs(math.degrees(angle)) <= FACE_PERSON_THRESHOLD_DEG:
+            self.get_logger().info(
+                f'Person is {math.degrees(angle):.0f} deg off heading; no turn needed')
+            self._start_welfare_check(active)
+            return
+
+        self._start_spin(active, angle)
+
+    def _relative_angle_to_person(self, active):
+        """Angle in radians from the robot's heading to the person, in [-pi, pi], or None.
+
+        Positive means the person is to the left (counter-clockwise), matching
+        the sign of Spin's target_yaw. Uses the latest map->base_link transform;
+        the robot is stationary at the approach pose when this runs.
+        """
+        person = active.get('person_map')
+        if person is None:
+            return None
+
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                'map', 'base_link', rclpy.time.Time(),
+                timeout=rclpy.duration.Duration(seconds=TF_LOOKUP_TIMEOUT))
+        except tf2_ros.TransformException as e:
+            self.get_logger().error(f'TF lookup map<-base_link failed: {e}')
+            return None
+
+        t = transform.transform.translation
+        q = transform.transform.rotation
+        robot_yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        bearing = math.atan2(person[1] - t.y, person[0] - t.x)
+        return math.atan2(math.sin(bearing - robot_yaw), math.cos(bearing - robot_yaw))
+
+    def _start_spin(self, active, angle):
+        """Send a Nav2 Spin goal to turn by angle radians toward the person."""
+        doc_id = active['doc_id']
+        if not self._spin_client.wait_for_server(timeout_sec=SPIN_SERVER_WAIT_TIMEOUT):
+            self.get_logger().warn(
+                'spin action server not available; running the welfare check without turning')
+            self._start_welfare_check(active)
+            return
+
+        goal = Spin.Goal()
+        goal.target_yaw = float(angle)
+        goal.time_allowance = rclpy.duration.Duration(seconds=SPIN_TIME_ALLOWANCE).to_msg()
+
+        self.get_logger().info(
+            f'Person is {math.degrees(angle):.0f} deg off heading; turning to face them')
+        active['stage'] = STAGE_AWAITING_SPIN
+        active['deadline'] = time.time() + SPIN_TIME_ALLOWANCE + SPIN_RESULT_GRACE
+        active['spin_goal_handle'] = None
+        active['spin_angle'] = angle
+
+        future = self._spin_client.send_goal_async(goal)
+        future.add_done_callback(lambda f: self._on_spin_goal_response(f, doc_id))
+
+    def _spin_still_expected(self, doc_id):
+        """The active alert, if it is doc_id and still waiting on Spin; else None."""
+        active = self._active
+        if active is None or active['doc_id'] != doc_id or active['stage'] != STAGE_AWAITING_SPIN:
+            return None  # stale callback: alert dropped, or Spin already timed out
+        return active
+
+    def _on_spin_goal_response(self, future, doc_id):
+        """Handle the spin server accepting or rejecting the goal."""
+        active = self._spin_still_expected(doc_id)
+        if active is None:
+            return
+
+        try:
+            goal_handle = future.result()
+        except Exception as e:
+            goal_handle = None
+            self.get_logger().warn(f'Spin goal send failed: {e}')
+        if goal_handle is None or not goal_handle.accepted:
+            self.get_logger().warn('Spin not started; running the welfare check without turning')
+            self._start_welfare_check(active)
+            return
+
+        active['spin_goal_handle'] = goal_handle
+        goal_handle.get_result_async().add_done_callback(
+            lambda f: self._on_spin_result(f, doc_id))
+
+    def _on_spin_result(self, future, doc_id):
+        """Log how the turn went, then run the welfare check whatever the outcome."""
+        active = self._spin_still_expected(doc_id)
+        if active is None:
+            return
+
+        try:
+            status = future.result().status
+        except Exception as e:
+            status = None
+            self.get_logger().warn(f'Spin result error: {e}')
+
+        commanded = math.degrees(active['spin_angle'])
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            residual = self._relative_angle_to_person(active)
+            residual_text = (
+                f'{math.degrees(residual):.0f} deg' if residual is not None else 'unknown')
+            self.get_logger().info(
+                f'Turned {commanded:.0f} deg toward the person; now {residual_text} off heading')
+        else:
+            self.get_logger().warn(
+                f'Spin of {commanded:.0f} deg did not succeed (status={status}); '
+                'running the welfare check anyway')
+        self._start_welfare_check(active)
+
+    def _start_welfare_check(self, active):
+        """Publish /welfare_check and arm the welfare result deadline."""
+        self.get_logger().info(f'Checking welfare for alert {active["doc_id"]}')
+        active['spin_goal_handle'] = None
         self.welfare_check_pub.publish(Empty())
         active['stage'] = STAGE_AWAITING_WELFARE
         active['deadline'] = time.time() + WELFARE_RESULT_TIMEOUT
@@ -525,6 +663,14 @@ class FirestoreDispatcher(Node):
             self.get_logger().warn(
                 f'No person found after {retries + 1} searches for alert {doc_id}')
             self._finalize_alert(doc_id, 'no_person_found')
+        elif active['stage'] == STAGE_AWAITING_SPIN:
+            self.get_logger().warn(
+                f'Spin result timed out for alert {doc_id}; running the welfare check anyway')
+            # Stop any turn still in progress: robot motion would upset the PIR reading.
+            goal_handle = active.get('spin_goal_handle')
+            if goal_handle is not None:
+                goal_handle.cancel_goal_async()
+            self._start_welfare_check(active)
         elif active['stage'] == STAGE_AWAITING_WELFARE:
             self.get_logger().error(f'Welfare result timed out for alert {doc_id}')
             self._finalize_alert(doc_id, 'welfare_timeout')
