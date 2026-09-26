@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 ROS 2 **Jazzy** workspace for an autonomous **tracked** (tank-tread) differential-drive robot
-running on a Raspberry Pi — a fall-detection / elder-care assistant. A SLAMTEC RPLIDAR A1,
+running on a Raspberry Pi — a fall-detection / elder-care assistant. A SLAMTEC RPLIDAR C1,
 DC motors with quadrature encoders, and a PIR + RCWL movement sensor pair feed three
 capabilities: SLAM mapping, Nav2 autonomous navigation, and a cloud-triggered welfare-check
 mission driven by Firestore.
@@ -112,7 +112,7 @@ SDK (`sdk/`) handles serial/TCP/UDP transport internally — do not modify SDK f
 model-specific launch files live in `launch/` (A1, A2, A3, S1–S3, T1, C1).
 
 Bringup starts the driver directly as a `Node` (not via an include) so `respawn=True` can be
-set — the A1 drops off USB occasionally and needs to come back on its own.
+set — the LIDAR drops off USB occasionally and needs to come back on its own.
 
 ### ROS interface summary
 

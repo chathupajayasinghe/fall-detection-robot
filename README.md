@@ -1,13 +1,13 @@
 # Fall Detection Robot
 
-A ROS 2-based autonomous robot that uses LIDAR and SLAM to navigate and detect falls. Built for Raspberry Pi with a differential-drive motor setup and SLAMTEC RPLIDAR A1.
+A ROS 2-based autonomous robot that uses LIDAR and SLAM to navigate and detect falls. Built for Raspberry Pi with a differential-drive motor setup and SLAMTEC RPLIDAR C1.
 
 ## Hardware
 
 | Component | Details |
 |-----------|---------|
 | Platform | Raspberry Pi |
-| LIDAR | SLAMTEC RPLIDAR A1 (via `/dev/ttyUSB0`) |
+| LIDAR | SLAMTEC RPLIDAR C1 (via the `/dev/rplidar` udev symlink, 460800 baud) |
 | Motors | DC motors with PWM control via GPIO |
 | Encoders | Quadrature encoders (20 ticks/rev) |
 | Wheel separation | 0.20 m |
